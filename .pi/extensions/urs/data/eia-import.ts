@@ -42,7 +42,7 @@ function parseCSVLine(line: string): string[] {
       current += c;
     }
   }
-  if (current) result.push(current.trim());
+  result.push(current.trim());
   return result;
 }
 
@@ -100,7 +100,7 @@ export function parseEIA861CSV(content: string): EIA861Row[] {
   return rows;
 }
 
-export function importEIA861FromFile(
+function importEIA861FromFile(
   db: Database.Database,
   filePath: string
 ): { imported: number; skipped: number; errors: string[] } {

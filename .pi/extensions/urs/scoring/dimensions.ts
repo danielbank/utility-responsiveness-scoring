@@ -157,11 +157,10 @@ function scoreRegulatoryEnvironment(signals: SignalData[]): DimensionResult {
   const rejected = regSignals.some((s) => s.commission_rejected_or_conditioned === true);
   const deregulated = regSignals.some((s) => s.deregulated_retail_choice === true);
 
-  let score = 50;
+  let score = deregulated ? 55 : 50; // deregulated base per spec
   if (hasIncentive) score += 25;
   if (approved) score += 15;
   if (rejected) score -= 25;
-  if (deregulated) score = 55; // scored differently per spec
 
   const parts: string[] = [];
   if (hasIncentive) parts.push("State has explicit datacenter incentive legislation.");

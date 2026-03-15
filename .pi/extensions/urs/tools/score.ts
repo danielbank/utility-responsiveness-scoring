@@ -288,7 +288,7 @@ export async function runScore(
     tier,
     JSON.stringify(dimensionResults),
     rationale,
-    JSON.stringify(context),
+    params.mw_requirement || params.target_isd ? JSON.stringify(context) : null,
     JSON.stringify(dataVintage),
     coverageWarning ?? null
   );
