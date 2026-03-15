@@ -245,7 +245,7 @@ async function scrapeNCDockets(
 
   try {
     await sleep(RATE_LIMIT_MS);
-    const searchUrl = `https://starw1.ncuc.gov/NCUC/page/Dockets/portal.aspx`;
+    const searchUrl = `https://starw1.ncuc.gov/NCUC/page/Dockets/portal.aspx?DocketNumber=${encodeURIComponent(query)}`;
     const res = await fetch(searchUrl, {
       headers: {
         "User-Agent": "URS-UtilityScoring/1.0 (utility-responsiveness-scoring)",
@@ -255,18 +255,42 @@ async function scrapeNCDockets(
     if (res.ok) {
       const html = await res.text();
       const text = stripHtml(html);
+      const docketDetailIds = [...html.matchAll(/DocketDetails\.aspx\?[^"']*DocketId=([a-f0-9-]+)/gi)].map(
+        (m) => m[1]
+      );
+      const seenIds = new Set<string>();
+      const baseDetailUrl = "https://starw1.ncuc.gov/NCUC/page/docket-docs/PSC/DocketDetails.aspx";
 
       if (docketNumber) {
+        const detailUrl =
+          docketDetailIds.length > 0
+            ? `${baseDetailUrl}?DocketId=${docketDetailIds[0]}`
+            : searchUrl;
         dockets.push({
           docket_number: docketNumber,
           title: extractTitle(text, docketNumber),
           state: "NC",
           status: "See NCUC portal",
           filed_date: "",
-          url: `https://starw1.ncuc.gov/NCUC/page/Dockets/portal.aspx`,
+          url: detailUrl,
           parties: [],
           ingested: false,
         });
+      } else {
+        for (const id of docketDetailIds.slice(0, limit)) {
+          if (seenIds.has(id)) continue;
+          seenIds.add(id);
+          dockets.push({
+            docket_number: id,
+            title: "",
+            state: "NC",
+            status: "Found in search",
+            filed_date: "",
+            url: `${baseDetailUrl}?DocketId=${id}`,
+            parties: [],
+            ingested: false,
+          });
+        }
       }
     } else {
       errors.push(`NCUC fetch failed: ${res.status}`);
@@ -331,11 +355,10 @@ async function scrapeTXDockets(
       });
       if (res.ok) {
         const html = await res.text();
-        const text = stripHtml(html);
-        const controlMatches = text.match(/\d{5}/g) ?? [];
+        const controlMatches = [...html.matchAll(/ControlNumber=(\d{5})/g)].map((m) => m[1]);
         const seen = new Set(dockets.map((d) => d.docket_number));
         for (const cn of controlMatches.slice(0, limit - dockets.length)) {
-          if (seen.has(cn) || cn.length !== 5) continue;
+          if (seen.has(cn)) continue;
           seen.add(cn);
           dockets.push({
             docket_number: cn,

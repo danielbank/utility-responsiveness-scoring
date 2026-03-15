@@ -313,7 +313,10 @@ export async function runFetchLegiScan(
       status: detail ? STATUS_MAP[detail.status] ?? `Status ${detail.status}` : "",
       status_date: detail?.status_date ?? "",
       last_action: detail?.history?.length ? detail.history[detail.history.length - 1].action : hit.last_action,
-      last_action_date: detail?.status_date ?? hit.last_action_date,
+      last_action_date:
+        (detail?.history?.length ? detail.history[detail.history.length - 1].date : undefined) ??
+        detail?.status_date ??
+        hit.last_action_date,
       url: detail?.state_link ?? hit.url,
       sponsors: detail?.sponsors?.map((s) => `${s.name} (${s.party})`) ?? [],
       subjects: detail?.subjects?.map((s) => s.subject_name) ?? [],
