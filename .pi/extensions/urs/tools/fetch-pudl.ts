@@ -11,7 +11,7 @@ import { createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
-import { extract } from "extract-zip";
+import extract from "extract-zip";
 
 const PUDL_ZENODO_RECORD = "17925629";
 const PUDL_FERC1_DBF_KEY = "ferc1_dbf.sqlite.zip";

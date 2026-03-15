@@ -10,6 +10,7 @@ import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
 import { runIngest } from "./ingest";
 
+const LEGISCAN_BASE = "https://api.legiscan.com/";
 const RATE_LIMIT_MS = 200;
 
 const DEFAULT_SEARCH_TERMS = [
