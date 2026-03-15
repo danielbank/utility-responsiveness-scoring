@@ -268,7 +268,7 @@ export async function runScore(
     tier_label: tierLabel,
     dimensions,
     rationale,
-    context_applied: params.mw_requirement || params.target_isd || params.use_case ? { ...context } : undefined,
+    context_applied: params.mw_requirement != null || params.target_isd != null || params.use_case != null ? { ...context } : undefined,
     scored_at: new Date().toISOString(),
     model_version: MODEL_VERSION,
     data_vintage: dataVintage,
@@ -290,7 +290,7 @@ export async function runScore(
     tier,
     JSON.stringify(dimensionResults),
     rationale,
-    params.mw_requirement || params.target_isd || params.use_case ? JSON.stringify(context) : null,
+    params.mw_requirement != null || params.target_isd != null || params.use_case != null ? JSON.stringify(context) : null,
     JSON.stringify(dataVintage),
     coverageWarning ?? null
   );
