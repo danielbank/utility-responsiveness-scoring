@@ -48,15 +48,15 @@ export async function runIngest(
   }
 
   const sourceId = `src-${randomUUID().slice(0, 8)}`;
-  const dimensionsAffected = Object.values(EXTRACTION_TO_DIMENSION);
   const docDate = params.document_date ?? new Date().toISOString().slice(0, 10);
+
+  const { results, validation_errors } = await extractFromDocument(text, params.source_type, params.utility_id, apiKey);
+  const dimensionsAffected = [...new Set(results.map((r) => EXTRACTION_TO_DIMENSION[r.target]).filter(Boolean))];
 
   db.prepare(
     `INSERT INTO sources (source_id, utility_id, source_type, document_date, file_path, dimensions_affected, max_age_days)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(sourceId, params.utility_id, params.source_type, docDate, params.file_path, JSON.stringify(dimensionsAffected), 365);
-
-  const { results, validation_errors } = await extractFromDocument(text, params.source_type, params.utility_id, apiKey);
   let count = 0;
 
   for (const r of results) {
