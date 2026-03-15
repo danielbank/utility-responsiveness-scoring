@@ -1,7 +1,7 @@
 /**
  * urs_fetch_edgar — Fetch SEC EDGAR filings and ingest into URS
  * Uses SEC's free data.sec.gov API. No API key required.
- * Rate limit: 10 requests/second. User-Agent header required.
+ * Rate limit: 10 requests/second. User-Agent header with email required.
  */
 
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
@@ -11,11 +11,42 @@ import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
 import { runIngest } from "./ingest";
 
-const SEC_USER_AGENT = "URS-UtilityScoring/1.0 (https://github.com/badlogic/pi-mono; utility-responsiveness-scoring)";
+const SEC_USER_AGENT = "URS-UtilityScoring/1.0 (urs-scoring@users.noreply.github.com)";
+const SEC_HEADERS: Record<string, string> = {
+  "User-Agent": SEC_USER_AGENT,
+  "Accept-Encoding": "gzip, deflate",
+  Accept: "application/json",
+};
+const SEC_DOC_HEADERS: Record<string, string> = {
+  "User-Agent": SEC_USER_AGENT,
+  "Accept-Encoding": "gzip, deflate",
+};
 const RATE_LIMIT_MS = 150; // ~6 req/sec, under SEC's 10/sec limit
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 1000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+async function fetchWithRetry(
+  url: string,
+  headers: Record<string, string>,
+  retries = MAX_RETRIES
+): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    await sleep(RATE_LIMIT_MS);
+    const res = await fetch(url, { headers });
+    if (res.status === 403 || res.status === 429) {
+      if (attempt < retries) {
+        const backoff = RETRY_BASE_MS * Math.pow(2, attempt);
+        await sleep(backoff);
+        continue;
+      }
+    }
+    return res;
+  }
+  return fetch(url, { headers });
 }
 
 function stripHtml(html: string): string {
@@ -106,17 +137,18 @@ export async function runFetchEdgar(
   let submissions: SecSubmissions;
 
   try {
-    await sleep(RATE_LIMIT_MS);
-    const res = await fetch(submissionsUrl, {
-      headers: { "User-Agent": SEC_USER_AGENT },
-    });
+    const res = await fetchWithRetry(submissionsUrl, SEC_HEADERS);
     if (!res.ok) {
+      const hint =
+        res.status === 403
+          ? " — SEC blocks requests without a valid User-Agent (must include email). If running from a cloud IP, SEC may also block non-residential addresses."
+          : "";
       return {
         success: false,
         utility_id: params.utility_id,
         cik,
         filings_fetched: 0,
-        errors: [`SEC submissions fetch failed: ${res.status} ${res.statusText}`],
+        errors: [`SEC submissions fetch failed: ${res.status} ${res.statusText}${hint}`],
       };
     }
     submissions = (await res.json()) as SecSubmissions;
@@ -159,14 +191,13 @@ export async function runFetchEdgar(
     const filingDate = recent.filingDate[i];
 
     const accessionPath = accession.replace(/-/g, "");
-    const docUrl = `https://www.sec.gov/Archives/edgar/data/${cikNum}/${accession}/${primaryDoc}`;
+    const docUrl = `https://www.sec.gov/Archives/edgar/data/${cikNum}/${accessionPath}/${primaryDoc}`;
 
     let text: string;
     try {
-      await sleep(RATE_LIMIT_MS);
-      const docRes = await fetch(docUrl, { headers: { "User-Agent": SEC_USER_AGENT } });
+      const docRes = await fetchWithRetry(docUrl, SEC_DOC_HEADERS);
       if (!docRes.ok) {
-        errors.push(`${form} ${filingDate}: fetch failed ${docRes.status}`);
+        errors.push(`${form} ${filingDate}: fetch failed ${docRes.status} (${docUrl})`);
         details.push({ form, filing_date: filingDate, accession, ingested: false });
         continue;
       }
