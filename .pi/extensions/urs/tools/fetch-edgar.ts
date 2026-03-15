@@ -11,7 +11,8 @@ import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
 import { runIngest } from "./ingest";
 
-const SEC_USER_AGENT = "URS-UtilityScoring/1.0 (urs-scoring@example.com)";
+const SEC_USER_AGENT =
+  process.env.SEC_USER_AGENT ?? "URS-UtilityScoring/1.0 (urs-scoring@example.com)";
 const SEC_HEADERS: Record<string, string> = {
   "User-Agent": SEC_USER_AGENT,
   "Accept-Encoding": "gzip, deflate",
