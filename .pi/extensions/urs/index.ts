@@ -1,6 +1,6 @@
 /**
  * URS Extension — Utility Responsiveness Scoring for pi agent
- * Registers 8 tools: urs_score, urs_lookup, urs_ingest, urs_history, urs_sources, urs_fetch_edgar, urs_arcgis_sync, urs_arcgis_pull
+ * Registers 9 tools: urs_score, urs_lookup, urs_ingest, urs_history, urs_sources, urs_fetch_edgar, urs_fetch_dsire, urs_arcgis_sync, urs_arcgis_pull
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -11,6 +11,7 @@ import { runIngest } from "./tools/ingest";
 import { runHistory } from "./tools/history";
 import { runSources } from "./tools/sources";
 import { runFetchEdgar } from "./tools/fetch-edgar";
+import { runFetchDsire } from "./tools/fetch-dsire";
 import { runArcGISSync } from "./tools/arcgis-sync";
 import { runArcGISPull } from "./tools/arcgis-pull";
 import { runImportEIA } from "./tools/import-eia";
@@ -243,6 +244,33 @@ export default function (pi: ExtensionAPI) {
       }
       if (result.details?.length) {
         text += `\n\n${result.details.map((d) => `${d.form} ${d.filing_date} ${d.ingested ? "✓" : ""}`).join("\n")}`;
+      }
+      return { content: [{ type: "text", text }], details: result };
+    },
+  });
+
+  pi.registerTool({
+    name: "urs_fetch_dsire",
+    label: "Fetch DSIRE State Incentives",
+    description:
+      "Fetch state incentive and policy programs from DSIRE (Database of State Incentives for Renewables & Efficiency). Maps to regulatory_environment and clean_energy_posture. No API key. Pass state (e.g. AZ, NC) or utility_id to resolve from DB.",
+    parameters: Type.Object({
+      state: Type.Optional(Type.String({ description: "2-letter state code (e.g. AZ, NC)" })),
+      utility_id: Type.Optional(Type.String({ description: "EIA Utility ID — resolves to state from DB" })),
+      since_date: Type.Optional(Type.String({ description: "Fetch only programs updated since (YYYYMMDD or YYYY-MM-DD)" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const result = await runFetchDsire(params as Parameters<typeof runFetchDsire>[0], ctx.cwd);
+      if (!result.success && result.programs_fetched === 0) {
+        return { content: [{ type: "text", text: result.errors.join("\n") }], details: result };
+      }
+      let text = `Fetched ${result.programs_fetched} DSIRE program(s) for ${result.state}. Wrote ${result.signals_written} signals to ${result.utilities_updated} utilities.`;
+      if (result.errors.length > 0) {
+        text += `\n\nWarnings: ${result.errors.join("; ")}`;
+      }
+      if (result.details?.length) {
+        const summary = result.details.slice(0, 10).map((d) => `${d.program_name} → ${d.dimension}`).join("\n");
+        text += `\n\nSample: ${summary}${result.details.length > 10 ? ` (+${result.details.length - 10} more)` : ""}`;
       }
       return { content: [{ type: "text", text }], details: result };
     },

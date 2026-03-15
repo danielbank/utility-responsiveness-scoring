@@ -32,6 +32,7 @@ Each dimension scores 0–100 with confidence 0–1. The composite is a weighted
 - **urs_score** — When the user wants to score, evaluate, or compare utilities. Call with `utility_id` from lookup. Include `mw_requirement`, `target_isd`, `use_case` if the user stated them.
 - **urs_ingest** — When the user provides a document (IRP, tariff filing, earnings transcript) to add to the knowledge base. Requires file path, source type, utility ID.
 - **urs_fetch_edgar** — When the user wants to pull 10-K/10-Q filings from SEC EDGAR for an investor-owned utility. Fetches from SEC's free API, optionally ingests for scoring. Only works for utilities with a CIK mapping (see data/edgar-cik-map.ts). APS (803), Duke (6452), Dominion (13998) are mapped.
+- **urs_fetch_dsire** — When the user wants state incentive and clean energy policy data. Fetches from DSIRE (Database of State Incentives for Renewables & Efficiency). No API key. Pass `state` (e.g. AZ, NC) or `utility_id` to resolve from DB. Feeds regulatory_environment and clean_energy_posture.
 - **urs_history** — When the user asks for score history or trends over time.
 - **urs_sources** — When the user asks what data backs a score, or which sources are stale.
 - **urs_arcgis_sync** — When the user wants to push scores to a map/ArcGIS.
@@ -48,6 +49,10 @@ Each dimension scores 0–100 with confidence 0–1. The composite is a weighted
 1. `urs_lookup`("Arizona Public Service") → utility_id 803
 2. `urs_fetch_edgar`(utility_id="803") — fetches 10-K and 10-Q, ingests for scoring
 3. `urs_score`(utility_id="803") to see improved score with new data
+
+**"Get state incentives for Arizona" / "Pull DSIRE data for NC utilities"**
+1. `urs_fetch_dsire`(state="AZ") or `urs_fetch_dsire`(utility_id="803") — fetches DSIRE programs, writes signals for all utilities in that state
+2. `urs_score`(utility_id="803") to see improved regulatory_environment and clean_energy_posture
 
 **"How responsive is Duke Energy Carolinas?"**
 1. `urs_lookup`("Duke Energy Carolinas") → get utility_id 6452
