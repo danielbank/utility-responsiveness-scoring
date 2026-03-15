@@ -88,9 +88,9 @@ This project includes the **URS extension** for scoring utility responsiveness f
 - "Compare utilities in Virginia"
 - "How responsive is Dominion for 200MW?"
 
-The extension provides `urs_score`, `urs_lookup`, `urs_ingest`, `urs_history`, `urs_sources`, `urs_import_eia`, `urs_arcgis_sync`, and `urs_arcgis_pull`. See [SPECIFICATION.md](SPECIFICATION.md) for the full spec.
+The extension provides `urs_score`, `urs_lookup`, `urs_ingest`, `urs_history`, `urs_sources`, `urs_fetch_edgar`, `urs_fetch_pudl`, `urs_fetch_eia`, `urs_fetch_legiscan`, `urs_fetch_hifld`, `urs_import_eia`, `urs_arcgis_sync`, and `urs_arcgis_pull`. See [SPECIFICATION.md](SPECIFICATION.md) for the full spec.
 
-**Setup:** Copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY`. For ArcGIS sync and pull, set `ARCGIS_API_KEY` and `ARCGIS_FEATURE_SERVICE_URL`.
+**Setup:** Copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY`. For ArcGIS sync and pull, set `ARCGIS_API_KEY` and `ARCGIS_FEATURE_SERVICE_URL`. For `urs_fetch_eia`, set `EIA_API_KEY` (free at eia.gov/opendata). For `urs_fetch_legiscan`, set `LEGISCAN_API_KEY` (free at legiscan.com).
 
 **EIA-861 data:** To populate the utilities database beyond the seed (~3,300 US utilities):
 

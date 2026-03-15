@@ -10,7 +10,10 @@ export const MAX_AGE_DAYS: Record<string, number> = {
   earnings_call: 180,
   news: 90,
   ferc_form: 365,
+  ferc_form_1: 365,
   eia_data: 365,
+  eia_api: 365,
+  legislation: 365,
 };
 
 export interface SourceRow {
