@@ -4,7 +4,7 @@
  * No API key required. Data is state-level; all utilities in state share signals.
  */
 
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { initDb } from "../data/db";
@@ -46,9 +46,25 @@ export interface FetchDsireResult {
   details?: Array<{ program_id: number; program_name: string; dimension: string }>;
 }
 
-/** Normalize state to 2-letter uppercase */
+/** US state full name -> 2-letter postal code (for API responses that use full names) */
+const STATE_NAME_TO_CODE: Record<string, string> = {
+  ALABAMA: "AL", ALASKA: "AK", ARIZONA: "AZ", ARKANSAS: "AR", CALIFORNIA: "CA", COLORADO: "CO",
+  CONNECTICUT: "CT", DELAWARE: "DE", "DISTRICT OF COLUMBIA": "DC", FLORIDA: "FL", GEORGIA: "GA",
+  HAWAII: "HI", IDAHO: "ID", ILLINOIS: "IL", INDIANA: "IN", IOWA: "IA", KANSAS: "KS",
+  KENTUCKY: "KY", LOUISIANA: "LA", MAINE: "ME", MARYLAND: "MD", MASSACHUSETTS: "MA",
+  MICHIGAN: "MI", MINNESOTA: "MN", MISSISSIPPI: "MS", MISSOURI: "MO", MONTANA: "MT",
+  NEBRASKA: "NE", NEVADA: "NV", "NEW HAMPSHIRE": "NH", "NEW JERSEY": "NJ", "NEW MEXICO": "NM",
+  "NEW YORK": "NY", "NORTH CAROLINA": "NC", "NORTH DAKOTA": "ND", OHIO: "OH", OKLAHOMA: "OK",
+  OREGON: "OR", PENNSYLVANIA: "PA", "RHODE ISLAND": "RI", "SOUTH CAROLINA": "SC",
+  "SOUTH DAKOTA": "SD", TENNESSEE: "TN", TEXAS: "TX", UTAH: "UT", VERMONT: "VT",
+  VIRGINIA: "VA", WASHINGTON: "WA", "WEST VIRGINIA": "WV", WISCONSIN: "WI", WYOMING: "WY",
+};
+
+/** Normalize state to 2-letter uppercase (handles both codes and full names) */
 function normalizeState(s: string): string {
-  return s.trim().toUpperCase().slice(0, 2);
+  const t = s.trim().toUpperCase();
+  if (t.length === 2) return t;
+  return STATE_NAME_TO_CODE[t] ?? t.slice(0, 2);
 }
 
 /** Classify program as regulatory_environment, clean_energy_posture, or both */
@@ -224,12 +240,20 @@ export async function runFetchDsire(params: FetchDsireParams, cwd: string): Prom
     };
   }
 
-  const statePrograms = programs.filter((p) => normalizeState(String(p.State ?? "")) === state);
+  let statePrograms = programs.filter((p) => normalizeState(String(p.State ?? "")) === state);
   const cacheDir = join(cwd, "data", ".urs-dsire-cache", state);
   if (!existsSync(cacheDir)) {
     mkdirSync(cacheDir, { recursive: true });
   }
-  writeFileSync(join(cacheDir, "programs.json"), JSON.stringify(statePrograms, null, 2), "utf-8");
+  const cachePath = join(cacheDir, "programs.json");
+  if (params.since_date && existsSync(cachePath)) {
+    const existing = JSON.parse(readFileSync(cachePath, "utf-8")) as DsireProgram[];
+    const byId = new Map<number, DsireProgram>();
+    for (const p of existing) if (p.ProgramId != null) byId.set(p.ProgramId, p);
+    for (const p of statePrograms) if (p.ProgramId != null) byId.set(p.ProgramId, p);
+    statePrograms = Array.from(byId.values());
+  }
+  writeFileSync(cachePath, JSON.stringify(statePrograms, null, 2), "utf-8");
 
   const utilities = db.prepare("SELECT utility_id FROM utilities WHERE UPPER(TRIM(state)) = ?").all(state) as Array<{
     utility_id: string;
@@ -251,6 +275,18 @@ export async function runFetchDsire(params: FetchDsireParams, cwd: string): Prom
   const docDate = new Date().toISOString().slice(0, 10);
   const details: Array<{ program_id: number; program_name: string; dimension: string }> = [];
   let signalsWritten = 0;
+
+  for (const prog of statePrograms) {
+    const dims = classifyProgram(prog);
+    if (dims.length === 0) continue;
+    for (const dim of dims) {
+      details.push({
+        program_id: prog.ProgramId ?? 0,
+        program_name: String(prog.ProgramName ?? prog.TypeName ?? "Unknown"),
+        dimension: dim,
+      });
+    }
+  }
 
   const deleteSignals = db.prepare("DELETE FROM signals WHERE source_id = ?");
   const deleteSource = db.prepare("DELETE FROM sources WHERE source_id = ?");
@@ -295,11 +331,6 @@ export async function runFetchDsire(params: FetchDsireParams, cwd: string): Prom
           0.9
         );
         signalsWritten++;
-        details.push({
-          program_id: prog.ProgramId ?? 0,
-          program_name: String(prog.ProgramName ?? prog.TypeName ?? "Unknown"),
-          dimension: dim,
-        });
       }
     }
   }
