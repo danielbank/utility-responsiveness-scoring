@@ -152,7 +152,7 @@ function buildSignalPayload(
   return {
     ...base,
     program_name: programName,
-    type: isGreenTariff ? "green_tariff" : isPpa ? "ppa_enabled" : "green_tariff",
+    type: isGreenTariff ? "green_tariff" : isPpa ? "ppa_enabled" : undefined,
     status: "approved",
     restrictions: prog.Budget ? String(prog.Budget) : undefined,
   };
