@@ -38,6 +38,8 @@ Each dimension scores 0–100 with confidence 0–1. The composite is a weighted
 - **urs_fetch_hifld** — When the user wants to enrich utilities with HIFLD territory metadata (names, addresses, types). No API key. Filter by state or utility_name.
 - **urs_history** — When the user asks for score history or trends over time.
 - **urs_sources** — When the user asks what data backs a score, or which sources are stale.
+- **urs_fetch_legiscan** — When the user wants to search state legislature bills related to energy/datacenters. Searches LegiScan API (free tier: 30k queries/month). Requires `LEGISCAN_API_KEY` from legiscan.com. Feeds regulatory_environment dimension. Use `state` to filter by state, `query` for custom search, or leave blank for default datacenter/energy keywords. Set `utility_id` + `ingest: true` to extract and store signals.
+- **urs_fetch_puc_dockets** — When the user wants to pull state PUC/PSC docket filings. Supports automated scrapers for AZ (ACC eDocket), NC (NCUC), TX (PUCT Interchange). For other states, use `url` param to manually fetch + ingest a docket document, or download the file and use `urs_ingest` directly. Use `list_systems: true` to see all known PUC systems. Affects all scoring dimensions.
 - **urs_arcgis_sync** — When the user wants to push scores to a map/ArcGIS.
 - **urs_arcgis_pull** — When the user wants to pull utility data or scores from ArcGIS. Use `persist: true` to save pulled utilities into the local DB for lookups and scoring.
 
@@ -84,6 +86,18 @@ Each dimension scores 0–100 with confidence 0–1. The composite is a weighted
 2. Offer to score the relevant ones
 3. When scoring, pass mw_requirement=200, target_isd="2027-06-01"
 4. If user cares about interconnection speed, suggest weight_overrides: { interconnection_speed: 1.5 }
+
+**"What energy bills are being proposed in Arizona?" / "Search for datacenter legislation"**
+1. `urs_fetch_legiscan`(state="AZ") — searches with default datacenter/energy keywords
+2. Or `urs_fetch_legiscan`(state="AZ", query="datacenter AND rate") for specific terms
+3. Review bills, optionally ingest relevant ones with `utility_id` for scoring
+
+**"Get Arizona PUC dockets about datacenters" / "Pull rate case filings from NC"**
+1. `urs_fetch_puc_dockets`(state="AZ", search_query="datacenter") — uses ACC eDocket scraper
+2. Or `urs_fetch_puc_dockets`(state="AZ", docket_number="E-00000A-25-0069") for specific docket
+3. For unsupported states: `urs_fetch_puc_dockets`(state="VA", url="https://...", utility_id="13998")
+4. Or download file + `urs_ingest`(file_path="...", source_type="rate_case", utility_id="13998")
+5. Use `urs_fetch_puc_dockets`(state="AZ", list_systems=true) to see all known PUC systems
 
 **"What dimensions do you score on?"**
 Answer from this skill — no tool call needed.
