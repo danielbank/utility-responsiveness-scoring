@@ -1,6 +1,7 @@
 /**
  * URS Extension — Utility Responsiveness Scoring for pi agent
- * Registers 8 tools: urs_score, urs_lookup, urs_ingest, urs_history, urs_sources, urs_fetch_edgar, urs_arcgis_sync, urs_arcgis_pull
+ * Registers 10 tools: urs_score, urs_lookup, urs_ingest, urs_history, urs_sources,
+ * urs_fetch_edgar, urs_fetch_legiscan, urs_fetch_puc_dockets, urs_arcgis_sync, urs_arcgis_pull
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -11,6 +12,8 @@ import { runIngest } from "./tools/ingest";
 import { runHistory } from "./tools/history";
 import { runSources } from "./tools/sources";
 import { runFetchEdgar } from "./tools/fetch-edgar";
+import { runFetchLegiScan } from "./tools/fetch-legiscan";
+import { runFetchPUCDockets } from "./tools/fetch-puc-dockets";
 import { runArcGISSync } from "./tools/arcgis-sync";
 import { runArcGISPull } from "./tools/arcgis-pull";
 import { runImportEIA } from "./tools/import-eia";
@@ -243,6 +246,131 @@ export default function (pi: ExtensionAPI) {
       }
       if (result.details?.length) {
         text += `\n\n${result.details.map((d) => `${d.form} ${d.filing_date} ${d.ingested ? "✓" : ""}`).join("\n")}`;
+      }
+      return { content: [{ type: "text", text }], details: result };
+    },
+  });
+
+  pi.registerTool({
+    name: "urs_fetch_legiscan",
+    label: "Fetch LegiScan Bills",
+    description:
+      "Search state legislature bills related to energy, datacenters, and utilities via LegiScan API. Free tier: 30k queries/month. Requires LEGISCAN_API_KEY. Feeds regulatory_environment dimension.",
+    parameters: Type.Object({
+      state: Type.Optional(Type.String({ description: "State abbreviation (e.g. AZ, NC, VA). Omit to search all states." })),
+      query: Type.Optional(Type.String({ description: "Custom search query. If omitted, uses default datacenter/energy terms." })),
+      keywords: Type.Optional(
+        Type.Array(Type.String(), { description: "Multiple search keywords (each run as separate query)" })
+      ),
+      year: Type.Optional(Type.Number({ description: "Filter by legislative year (e.g. 2025)" })),
+      bill_id: Type.Optional(Type.Number({ description: "Fetch a specific bill by LegiScan bill_id" })),
+      relevance_threshold: Type.Optional(Type.Number({ description: "Min relevance score 0-100 (default 50)" })),
+      limit: Type.Optional(Type.Number({ description: "Max bills to fetch (default 10)" })),
+      utility_id: Type.Optional(Type.String({ description: "EIA Utility ID — required for ingest" })),
+      ingest: Type.Optional(Type.Boolean({ description: "If true + utility_id set, run LLM extraction and store signals (default true)" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const legiscanKey = process.env.LEGISCAN_API_KEY ?? "";
+      if (!legiscanKey) {
+        return {
+          content: [{ type: "text", text: "LEGISCAN_API_KEY not set. Get a free key at legiscan.com/legiscan." }],
+          details: {},
+        };
+      }
+      const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
+      if (!anthropicKey && params.ingest !== false && params.utility_id) {
+        return {
+          content: [{ type: "text", text: "ANTHROPIC_API_KEY not set. Set ingest: false to fetch without extraction." }],
+          details: {},
+        };
+      }
+      const result = await runFetchLegiScan(
+        params as Parameters<typeof runFetchLegiScan>[0],
+        ctx.cwd,
+        legiscanKey,
+        anthropicKey
+      );
+      if (!result.success && result.bills_fetched === 0) {
+        return { content: [{ type: "text", text: result.errors.join("\n") }], details: result };
+      }
+      let text = `Found ${result.bills_found} bill(s), fetched ${result.bills_fetched}`;
+      if (params.state) text += ` in ${params.state.toUpperCase()}`;
+      text += `. Used ${result.queries_used} API queries.`;
+      if (result.bills_ingested != null) {
+        text += ` Ingested ${result.bills_ingested} for scoring.`;
+      }
+      if (result.bills.length > 0) {
+        text += "\n\n" + result.bills.map((b) =>
+          `${b.state} ${b.bill_number}: ${b.title.slice(0, 120)}${b.title.length > 120 ? "…" : ""} [${b.status}]${b.ingested ? " ✓ingested" : ""}`
+        ).join("\n");
+      }
+      if (result.errors.length > 0) {
+        text += `\n\nWarnings: ${result.errors.join("; ")}`;
+      }
+      return { content: [{ type: "text", text }], details: result };
+    },
+  });
+
+  pi.registerTool({
+    name: "urs_fetch_puc_dockets",
+    label: "Fetch State PUC Dockets",
+    description:
+      "Fetch state Public Utility Commission docket filings. Supports AZ (ACC eDocket), NC (NCUC), TX (PUCT Interchange) scrapers. For other states, use url param for manual fetch + ingest. Affects all scoring dimensions.",
+    parameters: Type.Object({
+      state: Type.String({ description: "State abbreviation (e.g. AZ, NC, TX, VA)" }),
+      docket_number: Type.Optional(Type.String({ description: "Specific docket/case number to look up" })),
+      search_query: Type.Optional(Type.String({ description: "Search term (e.g. 'datacenter', 'large load', 'rate case')" })),
+      url: Type.Optional(Type.String({ description: "Direct URL to a docket document for manual fetch + ingest" })),
+      utility_id: Type.Optional(Type.String({ description: "EIA Utility ID — required for ingest" })),
+      source_type: Type.Optional(Type.String({ description: "Source type for ingest: rate_case | irp | tariff_filing | interconnection (default: rate_case)" })),
+      document_date: Type.Optional(Type.String({ description: "Document date, ISO 8601" })),
+      ingest: Type.Optional(Type.Boolean({ description: "If true + utility_id set, run LLM extraction (default true)" })),
+      limit: Type.Optional(Type.Number({ description: "Max dockets to fetch (default 10)" })),
+      list_systems: Type.Optional(Type.Boolean({ description: "If true, list all known PUC systems and their capabilities" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
+      if (!anthropicKey && params.ingest !== false && params.utility_id) {
+        return {
+          content: [{ type: "text", text: "ANTHROPIC_API_KEY not set. Set ingest: false to fetch without extraction, or omit utility_id." }],
+          details: {},
+        };
+      }
+      const result = await runFetchPUCDockets(
+        params as Parameters<typeof runFetchPUCDockets>[0],
+        ctx.cwd,
+        anthropicKey
+      );
+
+      if (result.all_systems) {
+        const text = "Known State PUC Systems:\n\n" +
+          result.all_systems.map((s) =>
+            `${s.state} — ${s.name}\n  URL: ${s.url}\n  Scraper: ${s.has_scraper ? "Yes" : "No (manual fetch)"}\n  ${s.notes}`
+          ).join("\n\n");
+        return { content: [{ type: "text", text }], details: result };
+      }
+
+      if (!result.success && result.dockets_found === 0) {
+        let text = result.errors.join("\n");
+        if (result.system_info) {
+          text += `\n\nSystem: ${result.system_info.name}\nURL: ${result.system_info.url}\nSearch: ${result.system_info.search_url}`;
+        }
+        return { content: [{ type: "text", text }], details: result };
+      }
+
+      let text = `${result.state}: Found ${result.dockets_found} docket(s)`;
+      if (result.system_info) text += ` via ${result.system_info.name}`;
+      text += ".";
+      if (result.dockets_ingested != null) {
+        text += ` Ingested ${result.dockets_ingested} for scoring.`;
+      }
+      if (result.dockets.length > 0) {
+        text += "\n\n" + result.dockets.map((d) =>
+          `${d.docket_number}: ${d.title.slice(0, 120)}${d.title.length > 120 ? "…" : ""} [${d.status}]${d.ingested ? " ✓ingested" : ""}`
+        ).join("\n");
+      }
+      if (result.errors.length > 0) {
+        text += `\n\nWarnings: ${result.errors.join("; ")}`;
       }
       return { content: [{ type: "text", text }], details: result };
     },
