@@ -32,11 +32,14 @@ export interface FetchLegiscanResult {
 }
 
 async function legiscanRequest(apiKey: string, op: string, params: Record<string, unknown>): Promise<unknown> {
-  const res = await fetch(LEGISCAN_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key: apiKey, op, ...params }),
-  });
+  const searchParams = new URLSearchParams();
+  searchParams.set("key", apiKey);
+  searchParams.set("op", op);
+  for (const [k, v] of Object.entries(params)) {
+    searchParams.set(k, String(v));
+  }
+  const url = `${LEGISCAN_API}?${searchParams.toString()}`;
+  const res = await fetch(url, { method: "GET" });
   if (!res.ok) throw new Error(`LegiScan ${res.status}`);
   return res.json();
 }
