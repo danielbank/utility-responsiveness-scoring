@@ -32,6 +32,10 @@ Each dimension scores 0–100 with confidence 0–1. The composite is a weighted
 - **urs_score** — When the user wants to score, evaluate, or compare utilities. Call with `utility_id` from lookup. Include `mw_requirement`, `target_isd`, `use_case` if the user stated them.
 - **urs_ingest** — When the user provides a document (IRP, tariff filing, earnings transcript) to add to the knowledge base. Requires file path, source type, utility ID.
 - **urs_fetch_edgar** — When the user wants to pull 10-K/10-Q filings from SEC EDGAR for an investor-owned utility. Fetches from SEC's free API, optionally ingests for scoring. Only works for utilities with a CIK mapping (see data/edgar-cik-map.ts). APS (803), Duke (6452), Dominion (13998) are mapped.
+- **urs_fetch_pudl** — When the user wants FERC Form 1 data for track_record. Uses PUDL (Catalyst Cooperative). Requires ferc_id on utility. Downloads ferc1_dbf.sqlite from Zenodo on first run (~271MB). Pass pudl_sqlite_path for local file.
+- **urs_fetch_eia** — When the user wants EIA retail sales/customers data for track_record. Requires EIA_API_KEY (free at eia.gov/opendata).
+- **urs_fetch_legiscan** — When the user wants state energy/datacenter legislation for regulatory_environment. Requires LEGISCAN_API_KEY (free, 30k/month). Pass state or utility_id.
+- **urs_fetch_hifld** — When the user wants to enrich utilities with HIFLD territory metadata (names, addresses, types). No API key. Filter by state or utility_name.
 - **urs_history** — When the user asks for score history or trends over time.
 - **urs_sources** — When the user asks what data backs a score, or which sources are stale.
 - **urs_arcgis_sync** — When the user wants to push scores to a map/ArcGIS.
@@ -48,6 +52,22 @@ Each dimension scores 0–100 with confidence 0–1. The composite is a weighted
 1. `urs_lookup`("Arizona Public Service") → utility_id 803
 2. `urs_fetch_edgar`(utility_id="803") — fetches 10-K and 10-Q, ingests for scoring
 3. `urs_score`(utility_id="803") to see improved score with new data
+
+**"Get FERC Form 1 data for Duke" / "Improve track record for Dominion"**
+1. `urs_lookup` to get utility_id (must have ferc_id in DB)
+2. `urs_fetch_pudl`(utility_id="6452") — fetches PUDL FERC Form 1, writes track_record signals
+3. `urs_score` to see improved track_record dimension
+
+**"Get EIA retail data for APS"**
+1. `urs_fetch_eia`(utility_id="803") — requires EIA_API_KEY
+2. `urs_score`(utility_id="803")
+
+**"What energy legislation exists in Arizona?"**
+1. `urs_fetch_legiscan`(state="AZ") or `urs_fetch_legiscan`(utility_id="803")
+2. Bills cached; optionally ingested for regulatory_environment
+
+**"Enrich utilities with HIFLD territory data"**
+1. `urs_fetch_hifld`(state="AZ") — fetches and upserts utility metadata
 
 **"How responsive is Duke Energy Carolinas?"**
 1. `urs_lookup`("Duke Energy Carolinas") → get utility_id 6452

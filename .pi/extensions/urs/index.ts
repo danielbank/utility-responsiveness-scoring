@@ -1,6 +1,6 @@
 /**
  * URS Extension — Utility Responsiveness Scoring for pi agent
- * Registers 8 tools: urs_score, urs_lookup, urs_ingest, urs_history, urs_sources, urs_fetch_edgar, urs_arcgis_sync, urs_arcgis_pull
+ * Registers 12 tools: urs_score, urs_lookup, urs_ingest, urs_history, urs_sources, urs_fetch_edgar, urs_fetch_pudl, urs_fetch_eia, urs_fetch_legiscan, urs_fetch_hifld, urs_import_eia, urs_arcgis_sync, urs_arcgis_pull
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -11,6 +11,10 @@ import { runIngest } from "./tools/ingest";
 import { runHistory } from "./tools/history";
 import { runSources } from "./tools/sources";
 import { runFetchEdgar } from "./tools/fetch-edgar";
+import { runFetchPudl } from "./tools/fetch-pudl";
+import { runFetchEia } from "./tools/fetch-eia-api";
+import { runFetchLegiscan } from "./tools/fetch-legiscan";
+import { runFetchHifld } from "./tools/fetch-hifld";
 import { runArcGISSync } from "./tools/arcgis-sync";
 import { runArcGISPull } from "./tools/arcgis-pull";
 import { runImportEIA } from "./tools/import-eia";
@@ -243,6 +247,109 @@ export default function (pi: ExtensionAPI) {
       }
       if (result.details?.length) {
         text += `\n\n${result.details.map((d) => `${d.form} ${d.filing_date} ${d.ingested ? "✓" : ""}`).join("\n")}`;
+      }
+      return { content: [{ type: "text", text }], details: result };
+    },
+  });
+
+  pi.registerTool({
+    name: "urs_fetch_pudl",
+    label: "Fetch PUDL FERC Form 1",
+    description:
+      "Fetch FERC Form 1 data via PUDL (Catalyst Cooperative) for track_record. Uses ferc_id from utilities. Downloads ferc1_dbf.sqlite from Zenodo on first run (~271MB). Pass pudl_sqlite_path for local file.",
+    parameters: Type.Object({
+      utility_id: Type.String({ description: "EIA Utility ID" }),
+      year: Type.Optional(Type.Number({ description: "Report year (default: previous year)" })),
+      pudl_sqlite_path: Type.Optional(Type.String({ description: "Path to local ferc1_dbf.sqlite (skip Zenodo download)" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const result = await runFetchPudl(params as Parameters<typeof runFetchPudl>[0], ctx.cwd);
+      if (!result.success && result.signals_written === 0) {
+        return { content: [{ type: "text", text: result.errors.join("\n") }], details: result };
+      }
+      let text = `Fetched PUDL FERC Form 1 for utility ${result.utility_id}`;
+      if (result.ferc_id) text += ` (FERC ${result.ferc_id})`;
+      text += `. Wrote ${result.signals_written} signal(s).`;
+      if (result.errors.length > 0) text += `\n\nWarnings: ${result.errors.join("; ")}`;
+      return { content: [{ type: "text", text }], details: result };
+    },
+  });
+
+  pi.registerTool({
+    name: "urs_fetch_eia",
+    label: "Fetch EIA Open Data API",
+    description:
+      "Fetch retail sales, customers, revenue from EIA Open Data API for track_record. Requires EIA_API_KEY (free at eia.gov/opendata).",
+    parameters: Type.Object({
+      utility_id: Type.String({ description: "EIA Utility ID" }),
+      dataset: Type.Optional(Type.String({ description: "EIA dataset (default: electricity/retail-sales)" })),
+      start: Type.Optional(Type.String({ description: "Start date YYYY-MM-DD" })),
+      end: Type.Optional(Type.String({ description: "End date YYYY-MM-DD" })),
+      frequency: Type.Optional(Type.String({ description: "annual | monthly (default: annual)" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const apiKey = process.env.EIA_API_KEY ?? "";
+      const result = await runFetchEia(params as Parameters<typeof runFetchEia>[0], ctx.cwd, apiKey);
+      if (!result.success) {
+        return { content: [{ type: "text", text: result.errors.join("\n") }], details: result };
+      }
+      let text = `Fetched EIA data for utility ${result.utility_id}. Wrote ${result.signals_written} signal(s).`;
+      if (result.details?.records) text += ` (${result.details.records} records)`;
+      return { content: [{ type: "text", text }], details: result };
+    },
+  });
+
+  pi.registerTool({
+    name: "urs_fetch_legiscan",
+    label: "Fetch LegiScan Legislation",
+    description:
+      "Fetch state energy/datacenter legislation from LegiScan API for regulatory_environment. Requires LEGISCAN_API_KEY (free, 30k queries/month). Pass state or utility_id to resolve state.",
+    parameters: Type.Object({
+      state: Type.Optional(Type.String({ description: "State (2-letter, e.g. AZ)" })),
+      utility_id: Type.Optional(Type.String({ description: "Resolve state from utility" })),
+      query: Type.Optional(Type.String({ description: "Search query (default: datacenter OR electric utility)" })),
+      year: Type.Optional(Type.Number({ description: "Legislative year" })),
+      limit: Type.Optional(Type.Number({ description: "Max bills to fetch (default 5)" })),
+      ingest: Type.Optional(Type.Boolean({ description: "Run LLM extraction (default true)" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const apiKey = process.env.LEGISCAN_API_KEY ?? "";
+      const result = await runFetchLegiscan(
+        params as Parameters<typeof runFetchLegiscan>[0],
+        ctx.cwd,
+        apiKey
+      );
+      if (!result.success) {
+        return { content: [{ type: "text", text: result.errors.join("\n") }], details: result };
+      }
+      let text = `Fetched ${result.bills_fetched} bill(s) for ${result.state}.`;
+      if (result.bills_ingested != null) text += ` Ingested ${result.bills_ingested}.`;
+      if (result.details?.length) {
+        text += `\n\n${result.details.map((d) => `${d.bill_id}: ${d.title} ${d.ingested ? "✓" : ""}`).join("\n")}`;
+      }
+      return { content: [{ type: "text", text }], details: result };
+    },
+  });
+
+  pi.registerTool({
+    name: "urs_fetch_hifld",
+    label: "Fetch HIFLD Territory Metadata",
+    description:
+      "Fetch utility territory metadata from HIFLD ArcGIS REST. Enriches utilities table with names, addresses, types. No API key required.",
+    parameters: Type.Object({
+      state: Type.Optional(Type.String({ description: "Filter by state (e.g. AZ)" })),
+      utility_name: Type.Optional(Type.String({ description: "Filter by name (partial match)" })),
+      limit: Type.Optional(Type.Number({ description: "Max results (default 100)" })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const result = await runFetchHifld(params as Parameters<typeof runFetchHifld>[0], ctx.cwd);
+      if (!result.success) {
+        return { content: [{ type: "text", text: result.errors.join("\n") }], details: result };
+      }
+      let text = `Fetched ${result.utilities_fetched} utilities from HIFLD, upserted ${result.utilities_upserted}.`;
+      if (result.details?.length) {
+        text += `\n\n${result.details.slice(0, 10).map((d) => `${d.name} (${d.state})`).join("\n")}`;
+        if (result.details.length > 10) text += `\n... and ${result.details.length - 10} more`;
       }
       return { content: [{ type: "text", text }], details: result };
     },
