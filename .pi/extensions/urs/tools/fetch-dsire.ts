@@ -87,7 +87,7 @@ function classifyProgram(prog: DsireProgram): ("regulatory_environment" | "clean
     "solar",
     "wind",
     "renewable credit",
-    "rec",
+    "renewable energy credit",
     "srec",
     "clean energy",
     "carbon",
@@ -121,9 +121,11 @@ function buildSignalPayload(
   const programName = String((prog.ProgramName ?? typeName) || `Program ${prog.ProgramId}`);
 
   if (dimension === "regulatory_environment") {
+    const combined = `${String(prog.CategoryName ?? "")} ${String(prog.TypeName ?? "")} ${String(prog.Technologies ?? "")} ${programName}`.toLowerCase();
+    const isDeregulation = ["retail choice", "deregulat", "competitive retail"].some((k) => combined.includes(k));
     return {
       ...base,
-      datacenter_incentive_legislation: true,
+      ...(isDeregulation ? { deregulated_retail_choice: true } : { datacenter_incentive_legislation: true }),
       key_quotes: [programName],
     };
   }
