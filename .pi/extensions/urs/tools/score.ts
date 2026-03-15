@@ -5,6 +5,7 @@
 import type Database from "better-sqlite3";
 import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
+import { EXTRACTION_TO_DIMENSION } from "../data/extraction-mapping";
 import { getDimensionsFromSource, isSourceStale } from "../data/staleness";
 import { scoreAllDimensions } from "../scoring/dimensions";
 import { computeComposite } from "../scoring/aggregation";
@@ -123,42 +124,54 @@ export async function runScore(
       | undefined;
 
     if (cached && isCacheValid(cached.scored_at, stalenessThreshold)) {
-      let dimScores: DimensionScore[] = [];
-      try {
-        const arr = JSON.parse(cached.dimension_scores) as Array<{ id: DimensionId; score: number; confidence: number; evidence_summary?: string }>;
-        dimScores = arr.map((r) => ({
-          id: r.id,
-          label: DIMENSION_LABELS[r.id],
-          score: r.score,
-          confidence: r.confidence,
-          weight_applied: 1,
-          evidence_summary: r.evidence_summary,
-        }));
-      } catch {}
+      const cachedContext = cached.context_applied ? (JSON.parse(cached.context_applied) as Record<string, unknown>) : undefined;
+      const reqMw = params.mw_requirement;
+      const reqIsd = params.target_isd;
+      const reqUseCase = params.use_case;
+      const match = (a: unknown, b: unknown) => (a === undefined && b === undefined) || a === b;
+      const contextsMatch =
+        match(cachedContext?.mw_requirement, reqMw) &&
+        match(cachedContext?.target_isd, reqIsd) &&
+        match(cachedContext?.use_case, reqUseCase);
 
-      let dataVintage: DataVintage = { oldest_source: "", newest_source: "", staleness_flags: [] };
-      try {
-        dataVintage = JSON.parse(cached.data_vintage);
-      } catch {}
+      if (contextsMatch) {
+        let dimScores: DimensionScore[] = [];
+        try {
+          const arr = JSON.parse(cached.dimension_scores) as Array<{ id: DimensionId; score: number; confidence: number; evidence_summary?: string }>;
+          dimScores = arr.map((r) => ({
+            id: r.id,
+            label: DIMENSION_LABELS[r.id],
+            score: r.score,
+            confidence: r.confidence,
+            weight_applied: 1,
+            evidence_summary: r.evidence_summary,
+          }));
+        } catch {}
 
-      const response: ScoreResponse = {
-        utility_id: utility.utility_id,
-        utility_name: utility.utility_name,
-        state: utility.state,
-        resolution: { method: "eia_direct", confidence: 1, alternatives: [] },
-        composite_score: cached.composite_score,
-        composite_confidence: cached.composite_confidence,
-        tier: cached.tier,
-        tier_label: TIER_LABELS[cached.tier] ?? "Unknown",
-        dimensions: dimScores,
-        rationale: cached.rationale,
-        context_applied: cached.context_applied ? JSON.parse(cached.context_applied) : undefined,
-        scored_at: cached.scored_at,
-        model_version: cached.model_version,
-        data_vintage,
-        coverage_warning: cached.coverage_warning ?? undefined,
-      };
-      return response;
+        let dataVintage: DataVintage = { oldest_source: "", newest_source: "", staleness_flags: [] };
+        try {
+          dataVintage = JSON.parse(cached.data_vintage);
+        } catch {}
+
+        const response: ScoreResponse = {
+          utility_id: utility.utility_id,
+          utility_name: utility.utility_name,
+          state: utility.state,
+          resolution: { method: "eia_direct", confidence: 1, alternatives: [] },
+          composite_score: cached.composite_score,
+          composite_confidence: cached.composite_confidence,
+          tier: cached.tier,
+          tier_label: TIER_LABELS[cached.tier] ?? "Unknown",
+          dimensions: dimScores,
+          rationale: cached.rationale,
+          context_applied: cached.context_applied ? JSON.parse(cached.context_applied) : undefined,
+          scored_at: cached.scored_at,
+          model_version: cached.model_version,
+          data_vintage,
+          coverage_warning: cached.coverage_warning ?? undefined,
+        };
+        return response;
+      }
     }
   }
 
@@ -177,7 +190,7 @@ export async function runScore(
     for (const row of signalRows) {
       try {
         const payload = JSON.parse(row.payload) as Record<string, unknown>;
-        const dimension = mapExtractionTargetToDimension(row.extraction_target);
+        const dimension = EXTRACTION_TO_DIMENSION[row.extraction_target] ?? null;
         if (dimension) {
           signals.push({ dimension, ...payload });
         }
@@ -281,18 +294,4 @@ export async function runScore(
   );
 
   return response;
-}
-
-function mapExtractionTargetToDimension(target: string): DimensionId | null {
-  const map: Record<string, DimensionId> = {
-    large_load_tariff: "large_load_tariff",
-    interconnection_timeline: "interconnection_speed",
-    irp_load_growth: "irp_alignment",
-    leadership_statements: "leadership_posture",
-    clean_energy_program: "clean_energy_posture",
-    regulatory_signals: "regulatory_environment",
-    grid_capacity_signals: "grid_headroom",
-    track_record_signals: "track_record",
-  };
-  return map[target] ?? null;
 }

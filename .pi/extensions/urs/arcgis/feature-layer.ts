@@ -144,8 +144,6 @@ export async function applyEdits(
     }
 
     const applyUrl = new URL(`${baseUrl}/applyEdits`);
-    applyUrl.searchParams.set("f", "json");
-    applyUrl.searchParams.set("token", token);
 
     const res = await fetch(applyUrl.toString(), {
       method: "POST",

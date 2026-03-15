@@ -281,19 +281,19 @@ function scoreCleanEnergyPosture(signals: SignalData[]): DimensionResult {
 
   const cleanSignals = dimSignals as (SignalData & CleanEnergySignal)[];
   const hasGreenTariff = cleanSignals.some((s) => s.type === "green_tariff" && s.status === "approved");
-  const ppaEnabled = cleanSignals.some((s) => s.type === "ppa_enabled" || s.type === "btm_allowed");
+  const ppaEnabled = cleanSignals.some((s) => (s.type === "ppa_enabled" || s.type === "btm_allowed") && s.status === "approved");
   const blocks = cleanSignals.some((s) => s.status === "rejected" || (s.restrictions && String(s.restrictions).toLowerCase().includes("block")));
   const proposed = cleanSignals.some((s) => s.status === "proposed");
 
   let score = 50;
   if (hasGreenTariff || ppaEnabled) score = 85;
   else if (proposed) score = 55;
-  if (blocks) score = 25;
+  if (blocks && !hasGreenTariff && !ppaEnabled) score = 25;
 
   const parts: string[] = [];
   if (hasGreenTariff) parts.push("Approved green tariff or renewable direct-access program.");
   if (ppaEnabled) parts.push("Allows sleeved PPAs or behind-the-meter generation.");
-  if (blocks) parts.push("Blocks third-party PPAs with no green tariff alternative.");
+  if (blocks && !hasGreenTariff && !ppaEnabled) parts.push("Blocks third-party PPAs with no green tariff alternative.");
   if (proposed && !hasGreenTariff && !ppaEnabled) parts.push("Has announced but not yet implemented clean energy programs.");
 
   return {
