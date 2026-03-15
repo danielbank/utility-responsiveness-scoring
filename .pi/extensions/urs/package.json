@@ -1,0 +1,14 @@
+{
+  "name": "urs-extension",
+  "version": "1.0.0",
+  "description": "Utility Responsiveness Scoring extension for pi agent",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "better-sqlite3": "^11.6.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11"
+  }
+}

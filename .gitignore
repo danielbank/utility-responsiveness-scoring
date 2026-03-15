@@ -1,6 +1,9 @@
 # Environment
 .env.local
 
+# URS runtime data
+data/
+
 # Dependencies
 node_modules/
 

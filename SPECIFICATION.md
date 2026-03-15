@@ -16,48 +16,48 @@ This project is a submission for the SemiAnalysis x FluidAnalysis Hackathon
 
 The blocking constraint for datacenter siting is not information about grid capacity — hyperscalers already have that from OASIS, interconnection queue data, and their own engineering teams. The constraint is **utility behavior**: which utilities negotiate creatively on large-load tariffs, which run every customer through the same 3-year standard interconnection process regardless of MW size, and which have internal champions vs. institutional resistance to large load.
 
-This knowledge currently exists as tribal memory in the heads of experienced site selectors. URS systematizes it into a numeric score and structured rationale per utility, consumable via REST API and renderable as an ArcGIS feature layer over utility service territory polygons.
+This knowledge currently exists as tribal memory in the heads of experienced site selectors. URS systematizes it into a numeric score and structured rationale per utility, delivered via a **conversational pi agent** and renderable as an ArcGIS feature layer over utility service territory polygons.
 
 ---
 
-## 1. Input Schema
+## 1. Agent Interaction Model
 
-### 1.1 Score Request
+URS is implemented as a **pi agent extension** with custom tools. Users interact via natural language in the terminal rather than REST API calls.
 
-```
-POST /v1/score
-Content-Type: application/json
-```
+### 1.1 Conversational Interface
 
-```json
-{
-  "utility_id": "string, required — EIA Utility ID (5-digit numeric)",
-  "context": {
-    "mw_requirement": "number, optional — requested load in MW (e.g. 200)",
-    "target_isd": "string, optional — target in-service date, ISO 8601 (e.g. 2027-06-01)",
-    "interconnection_voltage_kv": "number, optional — preferred voltage level in kV (e.g. 345)",
-    "use_case": "string, optional — enum: 'hyperscale_campus' | 'colocation' | 'edge' | 'enterprise'",
-    "phasing_willing": "boolean, optional — whether caller will accept phased delivery"
-  },
-  "weights": {
-    "description": "Optional per-dimension weight overrides. Keys are dimension IDs. Values are floats 0.0–2.0. Omitted dimensions use default weight 1.0.",
-    "example": {
-      "large_load_tariff": 1.5,
-      "interconnection_speed": 1.8,
-      "leadership_posture": 0.5
-    }
-  },
-  "options": {
-    "include_rationale": "boolean, default true — include LLM-generated narrative",
-    "include_sources": "boolean, default true — include source citations per dimension",
-    "staleness_threshold_days": "number, default 180 — flag scores older than this"
-  }
-}
-```
+Users ask questions in plain language. The agent interprets intent, calls URS tools as needed, and responds conversationally.
 
-### 1.2 Utility Identifier Resolution
+| User intent                    | Example utterance                                      | Agent behavior                                                                 |
+| ------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Score a utility                | "How responsive is Duke Energy Carolinas?"              | `urs_lookup` → `urs_score` → present scorecard conversationally                |
+| Score with context             | "Score Duke for 200MW hyperscale targeting mid-2027"   | Extract context from utterance → `urs_score` with mw_requirement, target_isd   |
+| Compare utilities              | "Compare Duke and Dominion in Virginia"                 | `urs_lookup` each → `urs_score` each → present comparison                      |
+| Look up utility                | "What's utility 6452?"                                 | `urs_lookup` → return metadata                                                 |
+| Score history                  | "Show me score history for Duke"                       | `urs_history` → present trend                                                   |
+| Ingest document                | "I have Duke's IRP at ./docs/duke-irp.pdf"             | `urs_ingest` → summarize extraction results                                     |
+| Re-score with fresh data       | "Re-score Duke, force refresh"                          | `urs_score` with force_refresh                                                  |
+| Sync to map                    | "Push these scores to ArcGIS"                          | `urs_arcgis_sync`                                                               |
 
-The canonical identifier is the **EIA Utility Number** (from EIA-861). The API also accepts:
+### 1.2 Score Request Parameters (Tool Interface)
+
+The `urs_score` tool accepts:
+
+| Parameter          | Type    | Required | Description                                                                 |
+| ------------------ | ------- | -------- | --------------------------------------------------------------------------- |
+| `utility_id`       | string  | yes      | EIA Utility ID (5-digit numeric)                                             |
+| `mw_requirement`   | number  | no       | Requested load in MW (e.g. 200)                                             |
+| `target_isd`       | string  | no       | Target in-service date, ISO 8601 (e.g. 2027-06-01)                         |
+| `interconnection_voltage_kv` | number | no | Preferred voltage level in kV (e.g. 345)                                   |
+| `use_case`         | string  | no       | `hyperscale_campus` \| `colocation` \| `edge` \| `enterprise`               |
+| `phasing_willing`  | boolean | no       | Whether caller will accept phased delivery                                 |
+| `weight_overrides` | object  | no       | Per-dimension weights (0.0–2.0). Keys: dimension IDs. Default 1.0.          |
+| `force_refresh`    | boolean | no       | Bypass cache, re-run full pipeline                                         |
+| `staleness_threshold_days` | number | no | Flag scores older than this (default 180)                                  |
+
+### 1.3 Utility Identifier Resolution
+
+The canonical identifier is the **EIA Utility Number** (from EIA-861). The `urs_lookup` tool accepts:
 
 | Input format         | Example                   | Resolution method                                                             |
 | -------------------- | ------------------------- | ----------------------------------------------------------------------------- |
@@ -66,7 +66,7 @@ The canonical identifier is the **EIA Utility Number** (from EIA-861). The API a
 | FERC respondent ID   | `FERC:54`                 | Crosswalk table (EIA-861 ↔ FERC)                                              |
 | HIFLD utility ID     | `HIFLD:14354`             | Crosswalk table (EIA-861 ↔ HIFLD)                                             |
 
-If resolution is ambiguous, the response includes a `resolution` block with candidates rather than guessing.
+If resolution is ambiguous, the tool returns a `resolution` block with candidates. The agent asks the user to disambiguate before proceeding.
 
 ---
 
@@ -231,13 +231,13 @@ The composite score is a weighted average:
 S = \frac{\sum*{i=1}^{8} w_i \cdot s_i \cdot c_i}{\sum*{i=1}^{8} w_i \cdot c_i}
 \]
 
-Where \(w_i\) is the weight for dimension \(i\). Default weights are all 1.0. The caller can override weights via the `weights` field in the request (see §1.1). Weighting by confidence ensures that low-confidence dimensions do not dominate the composite.
+Where \(w_i\) is the weight for dimension \(i\). Default weights are all 1.0. The user can override weights via the `weight_overrides` parameter in `urs_score` (see §1.2). Weighting by confidence ensures that low-confidence dimensions do not dominate the composite.
 
 ### 3.2 Default Weight Rationale
 
-All dimensions default to equal weight (1.0) because the relative importance of each depends on the caller's specific situation. A caller with a 36-month timeline cares less about `interconnection_speed` than one trying to be online in 18 months. A caller with no clean energy mandate may zero out `clean_energy_posture`.
+All dimensions default to equal weight (1.0) because the relative importance of each depends on the user's specific situation. A user with a 36-month timeline cares less about `interconnection_speed` than one trying to be online in 18 months. A user with no clean energy mandate may zero out `clean_energy_posture`.
 
-The API does not prescribe "correct" weights. It provides the building blocks.
+The agent does not prescribe "correct" weights. It provides the building blocks and can suggest weight adjustments based on stated priorities.
 
 ### 3.3 Composite Confidence
 
@@ -321,12 +321,9 @@ The LLM is not a scoring engine. It is a structured data extraction engine and a
 
 ## 5. Output Schema
 
-### 5.1 Score Response
+### 5.1 Score Response (Internal Structure)
 
-```
-200 OK
-Content-Type: application/json
-```
+The `urs_score` tool returns a structured scorecard. The agent presents this conversationally to the user. The internal structure:
 
 ```json
 {
@@ -473,11 +470,11 @@ The feature layer is updated via the ArcGIS REST API (`applyEdits`) when scores 
 
 ### 6.1 Execution Modes
 
-**On-demand (API request):** When a caller hits `POST /v1/score`, the system checks the cache. If a cached score exists and all dimension data is within the staleness threshold, return the cached score. Otherwise, run stages 3–6 against the most recent extracted data. Stages 0–2 run asynchronously and are not triggered per-request.
+**On-demand (agent request):** When the user asks to score a utility, the agent calls `urs_score`. The system checks the cache. If a cached score exists and all dimension data is within the staleness threshold, return the cached score. Otherwise, run stages 3–6 against the most recent extracted data. Stages 0–2 run asynchronously and are not triggered per-request.
 
-**Batch refresh:** A scheduled job (daily or weekly) runs stages 0–2 for all tracked utilities. When new source documents are acquired, affected utilities are flagged for re-scoring. Stage 3–6 re-run for flagged utilities and update the feature layer.
+**Batch refresh:** A scheduled job (daily or weekly) can run stages 0–2 for all tracked utilities. When new source documents are acquired, affected utilities are flagged for re-scoring. Stage 3–6 re-run for flagged utilities and update the feature layer.
 
-**Manual override:** An admin endpoint allows forcing a re-score for a specific utility, bypassing the cache and re-running stages 1–6.
+**Manual override:** The user can request "re-score Duke with fresh data" — the agent calls `urs_score` with `force_refresh: true`, bypassing the cache and re-running stages 1–6.
 
 ---
 
@@ -527,53 +524,49 @@ A dimension score becomes stale when any of the following occur:
 
 ### 7.4 Staleness in the Response
 
-The response includes a `data_vintage` object (see §5.1) listing the oldest and newest source dates and any dimensions currently flagged as stale. The caller can set `staleness_threshold_days` in the request to control what counts as stale for their purposes.
+The response includes a `data_vintage` object (see §5.1) listing the oldest and newest source dates and any dimensions currently flagged as stale. The user can set `staleness_threshold_days` in the `urs_score` call to control what counts as stale for their purposes.
 
 When a score is returned with stale dimensions, the response includes a top-level `"stale": true` flag and the rationale text opens with a staleness caveat.
 
 ---
 
-## 8. Additional API Endpoints
+## 8. Pi Extension — Tool Interface
 
-### 8.1 Batch Score
+URS is implemented as a pi extension (`.pi/extensions/urs/`) that registers six tools. The URS skill (`.pi/skills/urs/SKILL.md`) provides domain knowledge so the agent knows when and how to use them.
 
-```
-POST /v1/score/batch
-```
+### 8.1 `urs_score` — Score a Utility
 
-Accepts an array of score requests (max 50). Returns an array of score responses. Useful for populating the feature layer or comparing utilities across a region.
+Primary tool. Parameters: `utility_id` (required), `mw_requirement`, `target_isd`, `use_case`, `weight_overrides`, `force_refresh`, `staleness_threshold_days`. Returns full scorecard (see §5.1).
 
-### 8.2 Utility Metadata
+### 8.2 `urs_lookup` — Resolve a Utility
 
-```
-GET /v1/utility/{utility_id}
-```
+Parameters: `query` (EIA ID, utility name, or prefixed ID). Returns utility metadata or ranked candidates if ambiguous.
 
-Returns utility metadata without scoring: name, state, EIA ID, FERC ID, HIFLD ID, holding company, service territory polygon GeoJSON reference, and links to known data sources.
+### 8.3 `urs_ingest` — Ingest Source Document
 
-### 8.3 Dimension Catalog
+Parameters: `file_path`, `source_type`, `utility_id`, `document_date`. Runs LLM extraction, stores signals in DB. Returns extraction summary.
 
-```
-GET /v1/dimensions
-```
+### 8.4 `urs_history` — Score History
 
-Returns the list of scoring dimensions with IDs, labels, descriptions, default weights, and currently tracked source types.
+Parameters: `utility_id`, `since` (optional ISO 8601). Returns historical scores for trend visualization.
 
-### 8.4 Score History
+### 8.5 `urs_sources` — List Data Sources
 
-```
-GET /v1/score/{utility_id}/history?since=2025-01-01
-```
+Parameters: `utility_id`, `dimension`, `stale_only` (all optional). Returns sources used in scoring with freshness status.
 
-Returns historical scores for a utility, enabling trend visualization. Each entry includes the full dimension breakdown and the data vintage at time of scoring.
+### 8.6 `urs_arcgis_sync` — Sync to ArcGIS Feature Layer
 
-### 8.5 Admin: Force Refresh
+Parameters: `utility_ids` (optional; omit to sync all). Pushes current scores to the ArcGIS feature service for map visualization.
 
-```
-POST /v1/admin/refresh/{utility_id}
-```
+### 8.7 Conversational UX Advantages
 
-Forces re-ingestion and re-scoring. Requires admin auth. Returns a job ID that can be polled.
+The agent interface enables behaviors a REST API cannot:
+
+- **Disambiguation:** When `urs_lookup` returns multiple candidates (e.g. "Duke Energy Carolinas" vs "Duke Energy Indiana"), the agent asks the user to clarify.
+- **Contextual explanation:** The agent can highlight dimensions most relevant to the user's stated MW, timeline, or use case.
+- **Guided exploration:** "Which utilities in Virginia score highest for interconnection speed?" — agent can iterate lookups and scores.
+- **Weight suggestions:** Based on "I need to be online in 18 months," the agent can suggest boosting `interconnection_speed` weight.
+- **Dimension questions:** "What dimensions do you score on?" answered from skill knowledge without a tool call.
 
 ---
 
@@ -583,13 +576,13 @@ Forces re-ingestion and re-scoring. Requires admin auth. Returns a job ID that c
 
 The most important dimension — actual willingness to negotiate flexible terms — is inherently opaque. Filed tariffs show what a utility offers publicly. Negotiated special contracts are often filed under seal or in confidential docket attachments. The score reflects the **visible** surface area of responsiveness, which may undercount utilities that negotiate aggressively but privately.
 
-**Mitigation:** The confidence score on `large_load_tariff` and `track_record` will be lower when no special contracts are visible. The rationale text will note the absence. Over time, expert input (site selector interviews → structured assessments) can supplement public data, but this creates a dependency on non-automated sources.
+**Mitigation:** The confidence score on `large_load_tariff` and `track_record` will be lower when no special contracts are visible. The rationale text will note the absence. The agent can explain this limitation when presenting scores. Over time, expert input (site selector interviews → structured assessments) can supplement public data, but this creates a dependency on non-automated sources.
 
 ### 9.2 State-Level Confounding
 
 A utility operating in a hostile regulatory environment may score low on `regulatory_environment` and `large_load_tariff` even if the utility itself is willing. The score conflates utility behavior with state-level constraints. A caller comparing Duke Energy Carolinas (NC) to Duke Energy Indiana (IN) might see different scores for entities under the same holding company, reflecting regulatory differences rather than corporate posture.
 
-**Mitigation:** The `regulatory_environment` dimension is explicitly separate from utility-specific dimensions. Callers who want to isolate utility behavior can zero-weight it. The rationale text should distinguish regulatory constraint from utility reluctance.
+**Mitigation:** The `regulatory_environment` dimension is explicitly separate from utility-specific dimensions. Users who want to isolate utility behavior can zero-weight it via `weight_overrides`. The rationale text should distinguish regulatory constraint from utility reluctance.
 
 ### 9.3 Small and Municipal Utility Blindness
 
@@ -618,7 +611,7 @@ The LLM extraction layer (§4.1) can misinterpret tariff language, miss relevant
 
 Utility behavior changes when a new CEO is appointed, when a rate case settles, or when a state passes new legislation. The scoring system is reactive: it detects these events through its crawlers and re-scores, but there is inherent lag between the event and the score update. During this window, the score is wrong.
 
-**Mitigation:** The staleness model (§7) is the primary defense. High-impact events (leadership change, major rate case closure) trigger alerts for manual review and expedited re-scoring. The `scored_at` timestamp and `data_vintage` fields let the caller assess recency.
+**Mitigation:** The staleness model (§7) is the primary defense. High-impact events (leadership change, major rate case closure) trigger alerts for manual review and expedited re-scoring. The `scored_at` timestamp and `data_vintage` fields let the user assess recency. The agent should mention staleness when presenting scores.
 
 ### 9.6 Circular Scoring Risk
 
@@ -630,29 +623,13 @@ If URS scores become widely used, they could influence utility behavior (utiliti
 
 An integer score on a 0–100 scale implies more precision than the underlying data supports. The difference between a 67 and a 72 is not meaningful. The tier system (§3.4) is the appropriate level of granularity for most decisions.
 
-**Mitigation:** The API returns both the numeric score (for programmatic use and sorting) and the tier (for decision-making). Documentation and rationale text should discourage over-indexing on small score differences. Consider adding a `score_range` field (e.g. `[65, 78]`) representing the plausible range given confidence levels.
+**Mitigation:** The score response returns both the numeric score (for sorting and comparison) and the tier (for decision-making). The agent should discourage over-indexing on small score differences when presenting results. Consider adding a `score_range` field (e.g. `[65, 78]`) representing the plausible range given confidence levels.
 
 ### 9.8 Geographic Mismatch
 
 A utility's service territory is not uniform. Duke Energy Carolinas may be highly responsive to a datacenter in the Charlotte area (existing transmission, substations, precedent) and unresponsive to one in a rural part of their territory with no transmission headroom. URS scores at the utility level, not the substation level.
 
-**Mitigation:** The `context` field in the request allows the caller to specify MW and voltage level, which can adjust the score commentary. Future versions could accept lat/lon and intersect against known transmission infrastructure. For now, the rationale text should note geographic variability where evidence supports it.
-
----
-
-## 10. Authentication and Rate Limiting
-
-- API keys issued per-organization. Keys scoped to read-only (`score`, `utility`, `dimensions`, `history`) or admin (`refresh`).
-- Rate limit: 100 requests/minute for score endpoints; 10 requests/minute for batch.
-- Score responses are cached and served from cache when fresh, so rate limiting primarily constrains new score computations.
-
----
-
-## 11. Versioning
-
-- API versioned via URL path (`/v1/`).
-- Scoring model versioned separately (`model_version` in response). When scoring heuristics change, the model version increments. Historical scores retain their original model version.
-- Breaking changes to the output schema require a major API version bump. New fields added to the response are non-breaking.
+**Mitigation:** The `urs_score` parameters (`mw_requirement`, `interconnection_voltage_kv`) allow the user to specify load and voltage, which adjusts the score commentary. Future versions could accept lat/lon and intersect against known transmission infrastructure. For now, the rationale text should note geographic variability where evidence supports it.
 
 ---
 

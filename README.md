@@ -80,6 +80,18 @@ Then just talk to pi. By default, pi gives the model three tools: `read`, `edit`
 
 **Platform notes:** [Windows](docs/windows.md) | [Termux (Android)](docs/termux.md) | [tmux](docs/tmux.md) | [Terminal setup](docs/terminal-setup.md) | [Shell aliases](docs/shell-aliases.md)
 
+### URS — Utility Responsiveness Scoring
+
+This project includes the **URS extension** for scoring utility responsiveness for datacenter siting. Run pi from this directory and ask:
+
+- "Score Duke Energy Carolinas"
+- "Compare utilities in Virginia"
+- "How responsive is Dominion for 200MW?"
+
+The extension provides `urs_score`, `urs_lookup`, `urs_ingest`, `urs_history`, `urs_sources`, and `urs_arcgis_sync`. See [SPECIFICATION.md](SPECIFICATION.md) for the full spec.
+
+**Setup:** Copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY`. For ArcGIS sync, set `ARCGIS_API_KEY` and `ARCGIS_FEATURE_SERVICE_URL`.
+
 ---
 
 ## Providers & Models
