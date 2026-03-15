@@ -1,8 +1,8 @@
 # Environment
 .env.local
 
-# URS runtime data
-data/
+# URS runtime data (root only; .pi/extensions/urs/data/ is source code)
+/data/
 
 # Dependencies
 node_modules/

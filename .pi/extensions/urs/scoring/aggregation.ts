@@ -10,6 +10,7 @@ export interface DimensionResult {
   id: DimensionId;
   score: number;
   confidence: number;
+  evidence_summary?: string;
 }
 
 export function computeComposite(

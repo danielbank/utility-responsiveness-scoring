@@ -4,6 +4,7 @@
 
 import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
+import { getDimensionsFromSource, isSourceStale, type SourceRow } from "../data/staleness";
 
 export interface SourcesParams {
   utility_id?: string;
@@ -53,28 +54,11 @@ export function runSources(params: SourcesParams, cwd: string): { sources: Sourc
   }>;
 
   const now = new Date();
-  const MAX_AGE_DAYS: Record<string, number> = {
-    tariff_filing: 365,
-    irp: 730,
-    rate_case: 365,
-    earnings_call: 180,
-    news: 90,
-    ferc_form: 365,
-    eia_data: 365,
-  };
 
   const sources: SourceEntry[] = rows
     .map((r) => {
-      let dims: string[] = [];
-      try {
-        dims = JSON.parse(r.dimensions_affected);
-      } catch {
-        dims = [];
-      }
-      const docDate = r.document_date ? new Date(r.document_date) : null;
-      const maxAge = r.max_age_days ?? MAX_AGE_DAYS[r.source_type] ?? 365;
-      const ageDays = docDate ? (now.getTime() - docDate.getTime()) / (1000 * 60 * 60 * 24) : 0;
-      const stale = ageDays > maxAge;
+      const dims = getDimensionsFromSource(r as SourceRow);
+      const stale = isSourceStale(r as SourceRow, now);
 
       return {
         source_id: r.source_id,

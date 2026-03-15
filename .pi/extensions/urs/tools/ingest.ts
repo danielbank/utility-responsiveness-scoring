@@ -15,6 +15,9 @@ const EXTRACTION_TO_DIMENSION: Record<string, string> = {
   irp_load_growth: "irp_alignment",
   leadership_statements: "leadership_posture",
   clean_energy_program: "clean_energy_posture",
+  regulatory_signals: "regulatory_environment",
+  grid_capacity_signals: "grid_headroom",
+  track_record_signals: "track_record",
 };
 
 export interface IngestParams {
@@ -28,7 +31,7 @@ export async function runIngest(
   params: IngestParams,
   cwd: string,
   apiKey: string
-): Promise<{ success: boolean; source_id?: string; signals_extracted?: number; error?: string }> {
+): Promise<{ success: boolean; source_id?: string; signals_extracted?: number; validation_errors?: number; error?: string }> {
   const db = initDb(cwd);
   seedUtilities(db);
 
@@ -63,7 +66,7 @@ export async function runIngest(
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(sourceId, params.utility_id, params.source_type, docDate, params.file_path, JSON.stringify(dimensionsAffected), 365);
 
-  const results = await extractFromDocument(text, params.source_type, params.utility_id, apiKey);
+  const { results, validation_errors } = await extractFromDocument(text, params.source_type, params.utility_id, apiKey);
   let count = 0;
 
   for (const r of results) {
@@ -79,5 +82,10 @@ export async function runIngest(
     count++;
   }
 
-  return { success: true, source_id: sourceId, signals_extracted: count };
+  return {
+    success: true,
+    source_id: sourceId,
+    signals_extracted: count,
+    validation_errors: validation_errors.length > 0 ? validation_errors.length : undefined,
+  };
 }

@@ -106,3 +106,63 @@ export interface UtilityMetadata {
   hifld_id?: string;
   holding_company?: string;
 }
+
+/** Signal interfaces matching extraction output schemas (spec section 4.1) */
+
+export interface TariffSignal {
+  has_large_load_tariff: boolean;
+  tariff_name?: string;
+  filing_date?: string;
+  terms_summary?: string;
+}
+
+export interface InterconnectionSignal {
+  stated_timeline_months?: number;
+  fast_track_available?: boolean;
+  conditions?: string;
+}
+
+export interface IRPSignal {
+  acknowledges_datacenter_growth?: boolean;
+  has_dedicated_scenario?: boolean;
+  tone?: "positive" | "neutral" | "cautious" | "negative";
+  key_quotes?: string[];
+}
+
+export interface LeadershipSignal {
+  speaker?: string;
+  date?: string;
+  sentiment?: "positive" | "neutral" | "negative";
+  quote?: string;
+  context?: string;
+}
+
+export interface CleanEnergySignal {
+  program_name?: string;
+  type?: "green_tariff" | "ppa_enabled" | "btm_allowed";
+  status?: "approved" | "proposed" | "rejected";
+  restrictions?: string;
+}
+
+export interface RegulatorySignal {
+  datacenter_incentive_legislation?: boolean;
+  commission_approved_special_contracts?: boolean;
+  commission_rejected_or_conditioned?: boolean;
+  deregulated_retail_choice?: boolean;
+  key_quotes?: string[];
+}
+
+export interface GridCapacitySignal {
+  has_hosting_capacity_map?: boolean;
+  proposed_speculative_transmission?: boolean;
+  offers_phased_delivery?: boolean;
+  cites_capacity_constraints_decline?: boolean;
+  key_quotes?: string[];
+}
+
+export interface TrackRecordSignal {
+  large_customer_count_50mw_plus?: number;
+  has_served_100mw_plus?: boolean;
+  known_complaints_or_disputes?: boolean;
+  key_quotes?: string[];
+}

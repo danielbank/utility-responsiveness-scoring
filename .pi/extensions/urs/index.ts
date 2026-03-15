@@ -96,7 +96,10 @@ export default function (pi: ExtensionAPI) {
       if (!result.success) {
         return { content: [{ type: "text", text: result.error ?? "Ingest failed" }], details: {} };
       }
-      const text = `Ingested ${params.file_path}. Extracted ${result.signals_extracted ?? 0} signals. Source ID: ${result.source_id}`;
+      let text = `Ingested ${params.file_path}. Extracted ${result.signals_extracted ?? 0} signals. Source ID: ${result.source_id}`;
+      if (result.validation_errors) {
+        text += ` (${result.validation_errors} extraction(s) failed schema validation — flagged for review)`;
+      }
       return { content: [{ type: "text", text }], details: result };
     },
   });
