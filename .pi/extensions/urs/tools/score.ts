@@ -153,6 +153,7 @@ export async function runScore(
           dataVintage = JSON.parse(cached.data_vintage);
         } catch {}
 
+        const cachedStale = dataVintage.staleness_flags.length > 0;
         const response: ScoreResponse = {
           utility_id: utility.utility_id,
           utility_name: utility.utility_name,
@@ -169,6 +170,7 @@ export async function runScore(
           model_version: cached.model_version,
           data_vintage,
           coverage_warning: cached.coverage_warning ?? undefined,
+          stale: cachedStale || undefined,
         };
         return response;
       }
