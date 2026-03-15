@@ -209,7 +209,7 @@ export default function (pi: ExtensionAPI) {
     name: "urs_fetch_edgar",
     label: "Fetch SEC EDGAR Filings",
     description:
-      "Fetch 10-K and 10-Q filings from SEC EDGAR for an investor-owned utility, optionally ingest for scoring. Uses SEC's free API. Requires utility→CIK mapping (see data/edgar-cik-map.ts).",
+      "Fetch 10-K and 10-Q filings from SEC EDGAR for an investor-owned utility, optionally ingest for scoring. Uses SEC's free API. Requires utility→CIK mapping (see .pi/extensions/urs/data/edgar-cik-map.ts).",
     parameters: Type.Object({
       utility_id: Type.String({ description: "EIA Utility ID" }),
       cik: Type.Optional(Type.String({ description: "SEC CIK (override mapping; 10-digit or numeric)" })),

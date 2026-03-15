@@ -11,7 +11,7 @@ import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
 import { runIngest } from "./ingest";
 
-const SEC_USER_AGENT = "URS-UtilityScoring/1.0 (urs-scoring@users.noreply.github.com)";
+const SEC_USER_AGENT = "URS-UtilityScoring/1.0 (urs-scoring@example.com)";
 const SEC_HEADERS: Record<string, string> = {
   "User-Agent": SEC_USER_AGENT,
   "Accept-Encoding": "gzip, deflate",
@@ -120,7 +120,7 @@ export async function runFetchEdgar(
       filings_fetched: 0,
       errors: [
         `No SEC CIK mapping for utility ${params.utility_id} (${utility.utility_name}). ` +
-          "Only investor-owned utilities file with SEC. Add mapping in data/edgar-cik-map.ts if this is an IOU.",
+          "Only investor-owned utilities file with SEC. Add mapping in .pi/extensions/urs/data/edgar-cik-map.ts if this is an IOU.",
       ],
     };
   }

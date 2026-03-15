@@ -8,28 +8,28 @@
 
 export const UTILITY_TO_CIK: Record<string, string> = {
   // Arizona
-  "803": "0000874360", // Arizona Public Service → Pinnacle West (PNW)
-  "24208": "0001312105", // Tucson Electric Power → Fortis Inc
+  "803": "0000764622", // Arizona Public Service → Pinnacle West Capital Corp (PNW)
+  "24208": "0000100122", // Tucson Electric Power Co
   // North Carolina / Duke
-  "6452": "0001326160", // Duke Energy Carolinas → Duke Energy
-  "6453": "0001326160", // Duke Energy Progress → Duke Energy
+  "6452": "0001326160", // Duke Energy Carolinas → Duke Energy Corp
+  "6453": "0001326160", // Duke Energy Progress → Duke Energy Corp
   // Virginia / Dominion
-  "13998": "0000715958", // Dominion Energy Virginia → Dominion Energy
-  "13999": "0000715958", // Dominion Energy South Carolina → Dominion Energy
-  "14328": "0000715958", // Dominion Energy North Carolina → Dominion Energy
+  "13998": "0000715957", // Dominion Energy Virginia → Dominion Energy Inc
+  "13999": "0000715957", // Dominion Energy South Carolina → Dominion Energy Inc
+  "14328": "0000715957", // Dominion Energy North Carolina → Dominion Energy Inc
   // Other major IOUs
-  "14354": "0001326160", // Duke Energy Ohio
-  "14355": "0001326160", // Duke Energy Kentucky
-  "13997": "0000715958", // Dominion Energy Ohio
-  "14329": "0000715958", // Dominion Energy West Virginia
-  "4904": "0000004904", // AEP (American Electric Power)
-  "72909": "0000072909", // Xcel Energy
-  "35808": "0000358088", // Entergy
-  "87721": "0000877221", // Southern Company
-  "1031296": "0001031296", // FirstEnergy
-  "1002918": "0001002918", // Sempra (SDG&E)
-  "1347559": "0001347559", // Portland General Electric
-  "14330": "0000874360", // UNS Electric → UniSource (Pinnacle West subsidiary)
+  "14354": "0001326160", // Duke Energy Ohio → Duke Energy Corp
+  "14355": "0001326160", // Duke Energy Kentucky → Duke Energy Corp
+  "13997": "0000715957", // Dominion Energy Ohio → Dominion Energy Inc
+  "14329": "0000715957", // Dominion Energy West Virginia → Dominion Energy Inc
+  "4904": "0000004904", // AEP (American Electric Power Co Inc)
+  "72909": "0000072903", // Xcel Energy Inc
+  "35808": "0000065984", // Entergy Corp
+  "87721": "0000092122", // Southern Co
+  "1031296": "0001031296", // FirstEnergy Corp
+  "1002918": "0001032208", // Sempra (SDG&E parent)
+  "1347559": "0000784977", // Portland General Electric Co
+  "14330": "0000764622", // UNS Electric → Pinnacle West Capital Corp (parent)
 };
 
 /** Resolve EIA utility_id to SEC CIK. Returns null if no mapping. */
