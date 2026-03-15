@@ -14,6 +14,7 @@ import type {
 } from "../scoring/types";
 
 const VALID_TONES = ["positive", "neutral", "cautious", "negative"] as const;
+const VALID_SENTIMENTS = ["positive", "neutral", "negative"] as const;
 const VALID_CLEAN_TYPES = ["green_tariff", "ppa_enabled", "btm_allowed"] as const;
 const VALID_CLEAN_STATUS = ["approved", "proposed", "rejected"] as const;
 
@@ -51,7 +52,7 @@ export function validateLeadershipSignal(payload: unknown): payload is Leadershi
   if (!isObject(payload)) return false;
   if (payload.speaker != null && typeof payload.speaker !== "string") return false;
   if (payload.date != null && typeof payload.date !== "string") return false;
-  if (payload.sentiment != null && !VALID_TONES.includes(payload.sentiment as (typeof VALID_TONES)[number])) return false;
+  if (payload.sentiment != null && !VALID_SENTIMENTS.includes(payload.sentiment as (typeof VALID_SENTIMENTS)[number])) return false;
   if (payload.quote != null && typeof payload.quote !== "string") return false;
   if (payload.context != null && typeof payload.context !== "string") return false;
   return true;

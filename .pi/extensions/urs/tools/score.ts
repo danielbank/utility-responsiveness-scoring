@@ -100,8 +100,9 @@ export async function runScore(
   }
 
   const stalenessThreshold = params.staleness_threshold_days ?? DEFAULT_STALENESS_THRESHOLD_DAYS;
+  const hasWeightOverrides = params.weight_overrides && Object.keys(params.weight_overrides).length > 0;
 
-  if (!params.force_refresh) {
+  if (!params.force_refresh && !hasWeightOverrides) {
     const cached = db
       .prepare(
         "SELECT score_id, scored_at, model_version, composite_score, composite_confidence, tier, dimension_scores, rationale, context_applied, data_vintage, coverage_warning FROM scores WHERE utility_id = ? ORDER BY scored_at DESC LIMIT 1"

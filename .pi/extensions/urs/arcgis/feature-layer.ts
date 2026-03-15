@@ -147,12 +147,6 @@ export async function applyEdits(
     applyUrl.searchParams.set("f", "json");
     applyUrl.searchParams.set("token", token);
 
-    const body: Record<string, unknown> = {
-      rollbackOnFailure: true,
-    };
-    if (adds.length) body.adds = adds;
-    if (updates.length) body.updates = updates;
-
     const res = await fetch(applyUrl.toString(), {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
