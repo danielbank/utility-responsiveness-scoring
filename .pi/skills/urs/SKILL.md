@@ -1,3 +1,7 @@
+---
+name: urs
+description: Scores utilities for datacenter siting responsiveness using 8 dimensions (large-load tariffs, interconnection speed, IRP alignment, etc.). Use when the user asks about utility responsiveness for datacenter siting, scoring or comparing utilities, or evaluating which utilities are most responsive to large-load customers.
+---
 # URS — Utility Responsiveness Scoring
 
 Use this skill when the user asks about utility responsiveness for datacenter siting, scoring utilities, comparing utilities, or evaluating which utilities are most responsive to large-load customers.
@@ -23,14 +27,27 @@ Each dimension scores 0–100 with confidence 0–1. The composite is a weighted
 
 ## When to Use Each Tool
 
+- **urs_import_eia** — When the user needs more utilities than the seed provides, or wants to populate the DB. Import from EIA-861 CSV via `file_path` (local) or `url`. Covers ~3,300 US utilities. Download from eia.gov/electricity/data/eia861/.
 - **urs_lookup** — First step when the user mentions a utility by name, state, or ID. Resolves to EIA Utility ID. If ambiguous, present candidates and ask the user to choose.
 - **urs_score** — When the user wants to score, evaluate, or compare utilities. Call with `utility_id` from lookup. Include `mw_requirement`, `target_isd`, `use_case` if the user stated them.
 - **urs_ingest** — When the user provides a document (IRP, tariff filing, earnings transcript) to add to the knowledge base. Requires file path, source type, utility ID.
+- **urs_fetch_edgar** — When the user wants to pull 10-K/10-Q filings from SEC EDGAR for an investor-owned utility. Fetches from SEC's free API, optionally ingests for scoring. Only works for utilities with a CIK mapping (see data/edgar-cik-map.ts). APS (803), Duke (6452), Dominion (13998) are mapped.
 - **urs_history** — When the user asks for score history or trends over time.
 - **urs_sources** — When the user asks what data backs a score, or which sources are stale.
 - **urs_arcgis_sync** — When the user wants to push scores to a map/ArcGIS.
+- **urs_arcgis_pull** — When the user wants to pull utility data or scores from ArcGIS. Use `persist: true` to save pulled utilities into the local DB for lookups and scoring.
 
 ## Workflow Examples
+
+**"I need Arizona utilities" / "Populate the DB" / "Pull utilities into the database"**
+1. `urs_import_eia` with `url` (if a known EIA-861 CSV URL exists) or `file_path` to a downloaded CSV
+2. Or `urs_arcgis_pull` with `state: "AZ"` and `persist: true` if ArcGIS already has the data
+3. Then `urs_lookup` and `urs_score` as needed
+
+**"Get SEC filings for APS" / "Ingest 10-K for Arizona Public Service"**
+1. `urs_lookup`("Arizona Public Service") → utility_id 803
+2. `urs_fetch_edgar`(utility_id="803") — fetches 10-K and 10-Q, ingests for scoring
+3. `urs_score`(utility_id="803") to see improved score with new data
 
 **"How responsive is Duke Energy Carolinas?"**
 1. `urs_lookup`("Duke Energy Carolinas") → get utility_id 6452

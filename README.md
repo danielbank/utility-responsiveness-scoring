@@ -88,9 +88,19 @@ This project includes the **URS extension** for scoring utility responsiveness f
 - "Compare utilities in Virginia"
 - "How responsive is Dominion for 200MW?"
 
-The extension provides `urs_score`, `urs_lookup`, `urs_ingest`, `urs_history`, `urs_sources`, and `urs_arcgis_sync`. See [SPECIFICATION.md](SPECIFICATION.md) for the full spec.
+The extension provides `urs_score`, `urs_lookup`, `urs_ingest`, `urs_history`, `urs_sources`, `urs_import_eia`, `urs_arcgis_sync`, and `urs_arcgis_pull`. See [SPECIFICATION.md](SPECIFICATION.md) for the full spec.
 
-**Setup:** Copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY`. For ArcGIS sync, set `ARCGIS_API_KEY` and `ARCGIS_FEATURE_SERVICE_URL`.
+**Setup:** Copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY`. For ArcGIS sync and pull, set `ARCGIS_API_KEY` and `ARCGIS_FEATURE_SERVICE_URL`.
+
+**EIA-861 data:** To populate the utilities database beyond the seed (~3,300 US utilities):
+
+1. Go to [EIA-861 detailed data files](https://www.eia.gov/electricity/data/eia861/)
+2. Download the ZIP for the desired year (e.g. [f8612024.zip](https://www.eia.gov/electricity/data/eia861/zip/f8612024.zip) for 2024)
+3. Extract the ZIP and locate the Utility file (e.g. `Utility.csv` or `Utility_Data.csv` — naming varies by year)
+4. If the file is Excel (`.xlsx`), export or save it as CSV
+5. Import via pi: ask "Import EIA-861 from `./path/to/Utility.csv`" or use the `urs_import_eia` tool with `file_path` pointing to the CSV
+
+The import expects columns `Utility_Number`, `Utility_Name`, and `State` (or common aliases). Optional: `Entity_Type`, `FERC_ID`, `HIFLD_ID`.
 
 ---
 
