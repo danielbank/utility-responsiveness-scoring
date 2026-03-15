@@ -67,47 +67,32 @@ async function queryExistingObjectIds(
   if (utilityIds.length === 0) return new Map();
 
   const where = utilityIds.map((id) => `UTILITY_ID = '${id.replace(/'/g, "''")}'`).join(" OR ");
-  const url = new URL(`${baseUrl}/query`);
-  url.searchParams.set("where", where);
-  url.searchParams.set("returnIdsOnly", "true");
-  url.searchParams.set("f", "json");
-  url.searchParams.set("token", token);
+  const body = new URLSearchParams({
+    where,
+    outFields: "UTILITY_ID,OBJECTID",
+    f: "json",
+    token,
+  });
 
-  const res = await fetch(url.toString());
+  const res = await fetch(`${baseUrl}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
   if (!res.ok) {
     throw new Error(`Query failed: ${res.status} ${await res.text()}`);
   }
 
-  const data = (await res.json()) as { objectIds?: number[]; error?: { message: string } };
+  const data = (await res.json()) as {
+    features?: Array<{ attributes: { UTILITY_ID: string; OBJECTID: number } }>;
+    error?: { message: string };
+  };
   if (data.error) {
     throw new Error(data.error.message);
   }
 
-  if (!data.objectIds || data.objectIds.length === 0) {
-    return new Map();
-  }
-
-  const url2 = new URL(`${baseUrl}/query`);
-  url2.searchParams.set("objectIds", data.objectIds.join(","));
-  url2.searchParams.set("outFields", "UTILITY_ID,OBJECTID");
-  url2.searchParams.set("f", "json");
-  url2.searchParams.set("token", token);
-
-  const res2 = await fetch(url2.toString());
-  if (!res2.ok) {
-    throw new Error(`Query details failed: ${res2.status}`);
-  }
-
-  const data2 = (await res2.json()) as {
-    features?: Array<{ attributes: { UTILITY_ID: string; OBJECTID: number } }>;
-    error?: { message: string };
-  };
-  if (data2.error) {
-    throw new Error(data2.error.message);
-  }
-
   const map = new Map<string, number>();
-  for (const f of data2.features ?? []) {
+  for (const f of data.features ?? []) {
     const uid = f.attributes?.UTILITY_ID;
     const oid = f.attributes?.OBJECTID;
     if (uid != null && oid != null) map.set(String(uid), oid);
