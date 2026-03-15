@@ -6,13 +6,12 @@
 
 import { mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
+import { insertStructuredSignals } from "./insert-structured-signals";
 
 const EIA_BASE = "https://api.eia.gov/v2";
 const CACHE_DIR = "data/.urs-eia-cache";
-const MAX_AGE_DAYS = 365;
 
 export interface FetchEiaParams {
   utility_id: string;
@@ -28,36 +27,6 @@ export interface FetchEiaResult {
   signals_written: number;
   errors: string[];
   details?: { source_type: string; document_date: string; records: number };
-}
-
-function insertStructuredSignals(
-  db: ReturnType<typeof initDb>,
-  utilityId: string,
-  sourceType: string,
-  documentDate: string,
-  payload: Record<string, unknown>
-): number {
-  const sourceId = `src-${randomUUID().slice(0, 8)}`;
-  db.prepare(
-    `INSERT INTO sources (source_id, utility_id, source_type, document_date, file_path, dimensions_affected, max_age_days)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    sourceId,
-    utilityId,
-    sourceType,
-    documentDate,
-    `eia-api:${sourceType}`,
-    JSON.stringify(["track_record"]),
-    MAX_AGE_DAYS
-  );
-
-  const signalId = `sig-${randomUUID().slice(0, 8)}`;
-  const fullPayload = { dimension: "track_record", ...payload };
-  db.prepare(
-    `INSERT INTO signals (signal_id, source_id, extraction_target, payload, model_version, extraction_confidence)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(signalId, sourceId, "track_record_signals", JSON.stringify(fullPayload), "eia-api-structured", 0.9);
-  return 1;
 }
 
 export async function runFetchEia(
@@ -159,7 +128,16 @@ export async function runFetchEia(
   const cachePath = join(cacheDir, `${params.utility_id}-${endYear}.json`);
   writeFileSync(cachePath, JSON.stringify({ rows: rows.length, totalCustomers, totalSales, totalRevenue }, null, 2), "utf-8");
 
-  const count = insertStructuredSignals(db, params.utility_id, "eia_api", `${endYear}-12-31`, payload);
+  const sourceType = "eia_api";
+  const count = insertStructuredSignals(
+    db,
+    params.utility_id,
+    sourceType,
+    `${endYear}-12-31`,
+    `eia-api:${sourceType}`,
+    [{ extraction_target: "track_record_signals", dimension: "track_record", payload }],
+    "eia-api-structured"
+  );
 
   return {
     success: true,

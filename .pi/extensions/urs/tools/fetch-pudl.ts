@@ -6,17 +6,16 @@
 
 import { mkdirSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { initDb } from "../data/db";
 import { seedUtilities } from "../data/seed";
 import extract from "extract-zip";
+import { insertStructuredSignals } from "./insert-structured-signals";
 
 const PUDL_ZENODO_RECORD = "17925629";
 const PUDL_FERC1_DBF_KEY = "ferc1_dbf.sqlite.zip";
 const CACHE_DIR = "data/.urs-pudl-cache";
-const MAX_AGE_DAYS = 365;
 
 export interface FetchPudlParams {
   utility_id: string;
@@ -31,53 +30,6 @@ export interface FetchPudlResult {
   signals_written: number;
   errors: string[];
   details?: { source_type: string; document_date: string; signals: string[] };
-}
-
-function insertStructuredSignals(
-  db: ReturnType<typeof initDb>,
-  utilityId: string,
-  sourceType: string,
-  documentDate: string,
-  signals: Array<{ extraction_target: string; payload: Record<string, unknown> }>
-): number {
-  const sourceId = `src-${randomUUID().slice(0, 8)}`;
-  const dimensionsAffected = [...new Set(signals.map((s) => mapTargetToDimension(s.extraction_target)).filter(Boolean))];
-  if (dimensionsAffected.length === 0) return 0;
-
-  db.prepare(
-    `INSERT INTO sources (source_id, utility_id, source_type, document_date, file_path, dimensions_affected, max_age_days)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    sourceId,
-    utilityId,
-    sourceType,
-    documentDate,
-    `pudl:${sourceType}`,
-    JSON.stringify(dimensionsAffected),
-    MAX_AGE_DAYS
-  );
-
-  let count = 0;
-  for (const s of signals) {
-    const dim = mapTargetToDimension(s.extraction_target);
-    if (!dim) continue;
-    const signalId = `sig-${randomUUID().slice(0, 8)}`;
-    const payload = { dimension: dim, ...s.payload };
-    db.prepare(
-      `INSERT INTO signals (signal_id, source_id, extraction_target, payload, model_version, extraction_confidence)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(signalId, sourceId, s.extraction_target, JSON.stringify(payload), "pudl-structured", 0.9);
-    count++;
-  }
-  return count;
-}
-
-function mapTargetToDimension(target: string): string | null {
-  const map: Record<string, string> = {
-    track_record_signals: "track_record",
-    large_load_tariff: "large_load_tariff",
-  };
-  return map[target] ?? null;
 }
 
 export async function runFetchPudl(
@@ -268,16 +220,19 @@ export async function runFetchPudl(
     key_quotes: [`FERC Form 1 ${year}: respondent_id ${fercId}`],
   };
 
+  const sourceType = "ferc_form_1";
   const signals = [
-    { extraction_target: "track_record_signals", payload: trackRecordPayload },
+    { extraction_target: "track_record_signals", dimension: "track_record", payload: trackRecordPayload },
   ];
 
   const count = insertStructuredSignals(
     db,
     params.utility_id,
-    "ferc_form_1",
+    sourceType,
     `${reportYear}-12-31`,
-    signals
+    `pudl:${sourceType}`,
+    signals,
+    "pudl-structured"
   );
 
   return {
