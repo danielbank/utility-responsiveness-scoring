@@ -168,7 +168,7 @@ export async function runScore(
           context_applied: cached.context_applied ? JSON.parse(cached.context_applied) : undefined,
           scored_at: cached.scored_at,
           model_version: cached.model_version,
-          data_vintage,
+          data_vintage: dataVintage,
           coverage_warning: cached.coverage_warning ?? undefined,
           stale: cachedStale || undefined,
         };
@@ -268,7 +268,7 @@ export async function runScore(
     tier_label: tierLabel,
     dimensions,
     rationale,
-    context_applied: params.mw_requirement || params.target_isd ? { ...context } : undefined,
+    context_applied: params.mw_requirement || params.target_isd || params.use_case ? { ...context } : undefined,
     scored_at: new Date().toISOString(),
     model_version: MODEL_VERSION,
     data_vintage: dataVintage,
@@ -290,7 +290,7 @@ export async function runScore(
     tier,
     JSON.stringify(dimensionResults),
     rationale,
-    params.mw_requirement || params.target_isd ? JSON.stringify(context) : null,
+    params.mw_requirement || params.target_isd || params.use_case ? JSON.stringify(context) : null,
     JSON.stringify(dataVintage),
     coverageWarning ?? null
   );
